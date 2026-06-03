@@ -1,200 +1,205 @@
-﻿from core import *
+from core import *
 
-def filter_tariff_data(df: pd.DataFrame) -> pd.DataFrame:
-    min_date = df["date"].min().date()
-    max_date = df["date"].max().date()
-    c1, c2, c3, c4 = st.columns([1.2, 1.1, 1.1, 1.0])
-    with c1:
-        date_range = st.date_input(
-            "Date range",
-            value=(min_date, max_date),
-            min_value=min_date,
-            max_value=max_date,
-            key="tariff_date_range",
-        )
-    with c2:
-        type_options = sorted(df["type"].dropna().unique())
-        selected_types = st.multiselect("Action type", type_options, default=type_options, key="tariff_types")
-    with c3:
-        imposing_options = sorted(df["imposing_label"].dropna().unique())
-        selected_imposers = st.multiselect(
-            "Imposing economy",
-            imposing_options,
-            default=imposing_options,
-            key="tariff_imposers",
-        )
-    with c4:
-        weight_mode = st.selectbox(
-            "Network weight",
-            ["Estimated trade value", "Event count"],
-            index=0,
-            key="tariff_weight_mode",
-        )
 
-    f1, f2, f3 = st.columns([1.1, 1.35, 0.9])
-    with f1:
-        target_options = sorted(df["target_label"].dropna().unique())
-        selected_targets = st.multiselect(
-            "Target economy",
-            target_options,
-            default=target_options,
-            key="tariff_targets",
-        )
-    with f2:
-        sector_options = sorted(df["sector"].dropna().unique())
-        selected_sectors = st.multiselect("Sector", sector_options, default=sector_options, key="tariff_sectors")
-    with f3:
-        retaliation_filter = st.selectbox(
-            "Retaliation",
-            ["All", "Retaliation only", "Initial/policy only"],
-            index=0,
-            key="tariff_retaliation",
-        )
+def _metric_value(value: float, formatter) -> str:
+    if pd.isna(value):
+        return "No data"
+    return formatter(value)
 
-    if isinstance(date_range, tuple) and len(date_range) == 2:
-        start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
-    else:
-        start_date, end_date = pd.to_datetime(min_date), pd.to_datetime(max_date)
 
-    filtered = df[
-        (df["date"] >= start_date)
-        & (df["date"] <= end_date)
-        & (df["type"].isin(selected_types))
-        & (df["imposing_label"].isin(selected_imposers))
-        & (df["target_label"].isin(selected_targets))
-        & (df["sector"].isin(selected_sectors))
-    ].copy()
-    if retaliation_filter == "Retaliation only":
-        filtered = filtered[filtered["retaliation"]]
-    elif retaliation_filter == "Initial/policy only":
-        filtered = filtered[~filtered["retaliation"]]
-    return filtered, weight_mode
+def _metric_label(base: str, year: int | None) -> str:
+    return f"{base}, {year}" if year is not None else f"{base}, latest year"
+
+
+def _missing_selected_periods(df: pd.DataFrame, selected_periods: list[str], indicators: list[str]) -> list[str]:
+    available_periods = set(
+        df[df["indicator_name"].isin(indicators) & df["value"].notna()]["period"].dropna().unique()
+    )
+    return [period for period in selected_periods if period not in available_periods]
 
 
 def render_tariff_tensions_tab() -> None:
-    df = load_tariff_data(TARIFF_PATH)
+    macro = load_macro_data(DATA_PATH)
+    years = sorted(macro["year"].dropna().astype(int).unique().tolist())
+    country_options = sorted(macro["country"].dropna().unique())
+    period_options = [p for p in PERIOD_ORDER if p in macro["period"].dropna().unique()]
+
     st.markdown(
         """
         <div class="page-title">
             <div>
-                <h1>Global Tariff Tensions</h1>
-                <p>Tariff events, retaliations, affected sectors, and directed pressure between economies.</p>
+                <h1>Trade and Macro Impact</h1>
+                <p>Annual trade flows, YoY shifts, GDP exposure, growth, and FDI across trade-war periods.</p>
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    filtered, weight_mode = filter_tariff_data(df)
-    if filtered.empty:
-        st.warning("No tariff events match the current filters.")
+    default_countries = [
+        c
+        for c in ["USA", "China", "Vietnam", "Germany", "Mexico"]
+        if c in country_options
+    ]
+    c1, c2, c3 = st.columns([1.35, 1.25, 0.9])
+    with c1:
+        selected_countries = st.multiselect(
+            "Countries",
+            country_options,
+            default=default_countries or country_options[:6],
+            key="impact_countries",
+        )
+    with c2:
+        selected_periods = st.multiselect(
+            "Periods",
+            period_options,
+            default=period_options,
+            key="impact_periods",
+        )
+    with c3:
+        selected_year_range = st.slider(
+            "Year range",
+            min_value=min(years),
+            max_value=max(years),
+            value=(min(years), max(years)),
+            step=1,
+            key="impact_year_range",
+        )
+
+    flow_col, yoy_col, scale_col, fdi_col = st.columns([0.9, 1.25, 0.85, 0.95])
+    with flow_col:
+        selected_trade_flow = st.selectbox(
+            "Trade flow",
+            ["Exports", "Imports"],
+            index=0,
+            key="impact_trade_flow",
+        )
+
+    yoy_indicator_options = [
+        EXPORTS,
+        IMPORTS,
+        TRADE_GDP,
+        GDP_GROWTH,
+        FDI_INFLOW,
+    ]
+    yoy_indicator_options = [i for i in yoy_indicator_options if i in macro["indicator_name"].unique()]
+    with yoy_col:
+        yoy_indicator = st.selectbox(
+            "YoY indicator",
+            yoy_indicator_options,
+            index=yoy_indicator_options.index(EXPORTS) if EXPORTS in yoy_indicator_options else 0,
+            key="impact_yoy_indicator",
+        )
+    with scale_col:
+        robust_yoy_display = st.checkbox(
+            "Robust YoY scale",
+            value=True,
+            key="impact_robust_yoy_scale",
+        )
+    with fdi_col:
+        fdi_display_mode = st.radio(
+            "FDI display",
+            ["Absolute USD", "Indexed to 100"],
+            horizontal=True,
+            key="impact_fdi_display_mode",
+        )
+
+    if not selected_countries or not selected_periods:
+        st.warning("Select at least one country and one period.")
         return
 
-    event_count = len(filtered)
-    known_value = filtered["known_trade_value"].sum()
-    known_count = int(filtered["trade_value_known"].sum())
-    avg_rate = filtered["tariff_rate_pct"].mean()
-    retaliation_share = filtered["retaliation"].mean() * 100
-    edges = aggregate_tariff_edges(filtered, weight_mode)
-    top_edge = edges.iloc[0] if not edges.empty else None
-
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Tariff events", f"{event_count:,}")
-    k2.metric("Known affected trade", f"${known_value:,.1f}B", f"{known_count} events with value")
-    k3.metric("Average tariff rate", f"{avg_rate:.1f}%")
-    k4.metric("Retaliation share", f"{retaliation_share:.1f}%")
-
-    if top_edge is not None:
-        suffix = "USD bn" if weight_mode == "Estimated trade value" else "events"
+    filtered = filter_annual_macro(macro, selected_countries, selected_periods, selected_year_range)
+    if filtered.empty:
+        st.warning("No data available for the selected filters.")
+        return
+    visible_indicators = [EXPORTS, IMPORTS, TRADE_GDP, GDP_GROWTH, FDI_INFLOW]
+    missing_periods = _missing_selected_periods(filtered, selected_periods, visible_indicators)
+    if missing_periods:
         st.caption(
-            f"Strongest visible edge by {weight_mode.lower()}: "
-            f"{top_edge['imposing_label']} -> {top_edge['target_label']} "
-            f"({top_edge['weight']:,.1f} {suffix})."
+            "Some selected periods have no available observations for the displayed trade and macro indicators: "
+            f"{', '.join(missing_periods)}."
         )
 
-    trend_col, year_col = st.columns(2)
-    with trend_col:
-        st.plotly_chart(make_tariff_cumulative_chart(filtered))
-    with year_col:
-        st.plotly_chart(make_tariff_actions_by_year(filtered))
+    trade_indicator = EXPORTS if selected_trade_flow == "Exports" else IMPORTS
+    latest_trade, trade_year = latest_indicator_snapshot(filtered, trade_indicator, "sum")
+    avg_trade_gdp, trade_gdp_year = latest_indicator_snapshot(filtered, TRADE_GDP, "mean")
+    latest_fdi, fdi_year = latest_indicator_snapshot(filtered, FDI_INFLOW, "sum")
+    avg_gdp_growth, gdp_growth_year = latest_indicator_snapshot(filtered, GDP_GROWTH, "mean")
 
-    map_left, map_right = st.columns(2)
-    with map_left:
-        st.plotly_chart(make_tariff_country_map(filtered, "imposing", weight_mode))
-    with map_right:
-        st.plotly_chart(make_tariff_country_map(filtered, "target", weight_mode))
+    k1, k2, k3, k4, k5 = st.columns(5)
+    k1.metric("Countries", f"{len(selected_countries)}")
+    k2.metric(_metric_label("Trade value", trade_year), _metric_value(latest_trade, format_usd))
+    k3.metric(_metric_label("Avg trade/GDP", trade_gdp_year), _metric_value(avg_trade_gdp, format_pct_plain))
+    k4.metric(_metric_label("FDI inflows", fdi_year), _metric_value(latest_fdi, format_usd))
+    k5.metric(_metric_label("Average GDP growth", gdp_growth_year), _metric_value(avg_gdp_growth, format_pct_plain))
 
-    st.plotly_chart(make_tariff_network(filtered, weight_mode))
+    st.plotly_chart(make_trade_import_export_chart(filtered, selected_trade_flow))
 
-    sector_col, tree_col = st.columns([1, 1])
-    with sector_col:
-        st.plotly_chart(make_tariff_sector_bar(filtered, weight_mode))
-    with tree_col:
-        st.plotly_chart(make_tariff_type_treemap(filtered))
+    left, right = st.columns(2)
+    with left:
+        if yoy_indicator:
+            st.plotly_chart(make_yoy_change_by_period_chart(filtered, [yoy_indicator], robust_yoy_display))
+            if robust_yoy_display:
+                st.caption("YoY values are clipped to the 5th-95th percentile for readability. Original values remain available in tooltips.")
+        else:
+            st.info("Select at least one YoY indicator.")
+    with right:
+        st.plotly_chart(make_trade_gdp_chart(filtered))
+        st.caption("Vietnam shows a much higher trade-to-GDP ratio than larger economies, indicating stronger exposure to global trade fluctuations.")
 
-    dist_col, scatter_col = st.columns(2)
-    with dist_col:
-        st.plotly_chart(make_tariff_rate_distribution(filtered))
-    with scatter_col:
-        st.plotly_chart(make_tariff_rate_value_scatter(filtered))
+    left, right = st.columns(2)
+    with left:
+        st.plotly_chart(make_gdp_growth_period_chart(filtered))
+        st.caption("Average GDP growth helps compare macroeconomic performance across trade-war periods.")
+    with right:
+        st.plotly_chart(make_fdi_inflows_chart(filtered, fdi_display_mode))
+        st.caption("FDI values are shown in current USD. Countries with larger economies may dominate the absolute scale.")
 
-    source_col, notes_col = st.columns([0.92, 1.08])
-    with source_col:
-        st.plotly_chart(make_tariff_source_chart(filtered))
-    with notes_col:
-        st.subheader("Filtered tariff events")
-        table = filtered[
-            [
-                "date",
-                "imposing_label",
-                "target_label",
-                "sector",
-                "tariff_rate_pct",
-                "tariff_rate_delta",
-                "estimated_trade_value_usd_bn",
-                "type",
-                "retaliation_label",
-                "legal_basis",
-                "source",
-                "notes",
-            ]
-        ].sort_values("date", ascending=False)
-        table = table.rename(
+    if len(selected_countries) > 6:
+        st.caption(
+            "The GDP growth chart above is already shown as a country-by-period heatmap, so the separate macro performance heatmap is omitted to avoid duplicating the same view."
+        )
+    else:
+        st.plotly_chart(make_macro_performance_heatmap(filtered), use_container_width=True)
+
+    st.subheader("Period summary")
+    summary = make_macro_period_summary_table(filtered)
+    if summary.empty:
+        st.warning("No data available for the selected filters.")
+    else:
+        display_summary = summary.copy()
+        monetary_indicators = {EXPORTS, IMPORTS, FDI_INFLOW}
+        percent_indicators = {TRADE_GDP, GDP_GROWTH}
+        display_summary["Average value"] = display_summary.apply(
+            lambda row: format_usd(row["average_value"])
+            if row["indicator_name"] in monetary_indicators
+            else format_pct_plain(row["average_value"])
+            if row["indicator_name"] in percent_indicators
+            else f"{row['average_value']:.2f}",
+            axis=1,
+        )
+        display_summary["Median YoY %"] = display_summary["median_yoy_change_pct"].map(format_pct_plain)
+        display_summary["Observations"] = display_summary["observations"].astype(int)
+        display_summary = display_summary.rename(
             columns={
-                "date": "Date",
-                "imposing_label": "Imposing",
-                "target_label": "Target",
-                "sector": "Sector",
-                "tariff_rate_pct": "Rate %",
-                "tariff_rate_delta": "Delta %",
-                "estimated_trade_value_usd_bn": "Trade value USD bn",
-                "type": "Type",
-                "retaliation_label": "Retaliation",
-                "legal_basis": "Legal basis",
-                "source": "Source",
-                "notes": "Notes",
+                "period": "Period",
+                "indicator_label": "Indicator",
             }
-        )
+        )[["Period", "Indicator", "Average value", "Median YoY %", "Observations"]]
+        display_summary["Period"] = display_summary["Period"].astype(str)
         st.dataframe(
-            table,
-            width="stretch",
+            display_summary,
+            use_container_width=True,
             hide_index=True,
-            height=430,
-            column_config={
-                "Date": st.column_config.DateColumn("Date", format="YYYY-MM-DD"),
-                "Rate %": st.column_config.NumberColumn("Rate %", format="%.1f"),
-                "Delta %": st.column_config.NumberColumn("Delta %", format="%.1f"),
-                "Trade value USD bn": st.column_config.NumberColumn("Trade value USD bn", format="%.1f"),
-            },
+            height=360,
         )
 
     st.markdown(
         f"""
         <div class="source-note">
-            Source: <code>{TARIFF_PATH}</code>. Missing affected-trade values are included in event-count views but excluded from
-            value-weighted maps, Sankey flows, and network weights.
+            Source: <code>{DATA_PATH}</code>. The tab uses annual observations for exports/imports,
+            YoY change, trade as a share of GDP, GDP growth, and FDI net inflows.
         </div>
         """,
         unsafe_allow_html=True,
     )
-

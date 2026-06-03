@@ -17,7 +17,7 @@ tabs = st.tabs(
     [
         "Executive Overview",
         "Trade Volume",
-        "Global Tariff Tensions",
+        "Trade and Macro Impact",
         "Financial Market Reaction",
         "Exchange Rate Pressure",
         "Sectoral Impact",

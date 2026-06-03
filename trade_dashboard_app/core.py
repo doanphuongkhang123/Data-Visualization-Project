@@ -17,6 +17,9 @@ INFLATION_PATH = APP_DIR.parent / "new" / "inflation_response.csv"
 
 EXPORTS = "Exports of goods & services (USD)"
 IMPORTS = "Imports of goods & services (USD)"
+TRADE_GDP = "Trade (% of GDP)"
+GDP_GROWTH = "GDP growth (annual %)"
+FDI_INFLOW = "FDI net inflows (USD)"
 TRADE_FLOW_TO_LABEL = {
     "Exports": EXPORTS,
     "Imports": IMPORTS,
@@ -293,6 +296,8 @@ def load_macro_data(path: Path) -> pd.DataFrame:
     df["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int64")
     df["value"] = pd.to_numeric(df["value"], errors="coerce")
     df["yoy_change_pct"] = pd.to_numeric(df["yoy_change_pct"], errors="coerce")
+    df["iso3"] = df["country"].map(lambda c: COUNTRY_META.get(c, {}).get("iso3", c))
+    df["region"] = df["country"].map(lambda c: COUNTRY_META.get(c, {}).get("region", "Other"))
     return df
 
 
@@ -334,6 +339,38 @@ def format_pct(value: float) -> str:
     if pd.isna(value):
         return "n/a"
     return f"{value:+.1f}%"
+
+
+def format_pct_plain(value: float) -> str:
+    if pd.isna(value):
+        return "n/a"
+    return f"{value:.1f}%"
+
+
+def short_indicator_name(indicator_name: str) -> str:
+    return {
+        EXPORTS: "Exports",
+        IMPORTS: "Imports",
+        FDI_INFLOW: "FDI inflows",
+        GDP_GROWTH: "GDP growth",
+        TRADE_GDP: "Trade/GDP",
+    }.get(indicator_name, indicator_name)
+
+
+def latest_indicator_snapshot(
+    df: pd.DataFrame,
+    indicator: str | list[str],
+    aggfunc: str = "sum",
+) -> tuple[float, int | None]:
+    indicators = [indicator] if isinstance(indicator, str) else indicator
+    work = df[df["indicator_name"].isin(indicators)].dropna(subset=["value"]).copy()
+    if work.empty:
+        return math.nan, None
+    latest_year = int(work["year"].max())
+    latest = work[work["year"] == latest_year]
+    if aggfunc == "mean":
+        return latest["value"].mean(), latest_year
+    return latest["value"].sum(), latest_year
 
 
 def selected_metric_frame(wide: pd.DataFrame, year: int, metric_col: str) -> pd.DataFrame:
@@ -1129,6 +1166,297 @@ def make_macro_indicator_chart(df: pd.DataFrame, countries: list[str], indicator
     fig.update_yaxes(matches=None, tickformat="~s")
     fig.update_layout(height=max(420, 170 * len(indicators)), legend=dict(orientation="h", y=-0.12, x=0))
     return fig
+
+
+def filter_annual_macro(
+    df: pd.DataFrame,
+    countries: list[str],
+    periods: list[str],
+    year_range: tuple[int, int],
+) -> pd.DataFrame:
+    start_year, end_year = year_range
+    return df[
+        (df["country"].isin(countries))
+        & (df["period"].isin(periods))
+        & (df["year"] >= start_year)
+        & (df["year"] <= end_year)
+    ].copy()
+
+
+def make_trade_import_export_chart(df: pd.DataFrame, trade_flow: str) -> go.Figure:
+    indicator = EXPORTS if trade_flow == "Exports" else IMPORTS if trade_flow == "Imports" else None
+    title = (
+        f"{trade_flow} by country"
+        if trade_flow in ["Exports", "Imports"]
+        else "Selected trade flow by country"
+    )
+    if indicator is None:
+        return go.Figure().update_layout(title=title, height=500)
+    work = df[df["indicator_name"] == indicator].dropna(subset=["value"]).copy()
+    work["formatted_value"] = work["value"].map(format_usd)
+    fig = px.line(
+        work,
+        x="year",
+        y="value",
+        color="country",
+        markers=True,
+        custom_data=["country", "period", "indicator_name", "formatted_value"],
+        title=f"{title}<br><sup>Values shown in current USD.</sup>",
+        labels={"year": "", "value": "US dollars", "country": "Country"},
+    )
+    fig.update_traces(
+        hovertemplate=(
+            "<b>%{customdata[0]}</b><br>Year: %{x}<br>Period: %{customdata[1]}"
+            "<br>Indicator: %{customdata[2]}<br>Displayed value: %{customdata[3]}"
+            "<br>Original value: $%{y:,.0f}<extra></extra>"
+        )
+    )
+    fig.update_layout(
+        height=500,
+        yaxis=dict(tickformat="~s", gridcolor="#e9edf3"),
+        xaxis=dict(dtick=1),
+        legend=dict(orientation="h", y=-0.25, x=0),
+    )
+    return fig
+
+
+def make_yoy_change_by_period_chart(df: pd.DataFrame, indicators: list[str], robust_display: bool = True) -> go.Figure:
+    work = df[df["indicator_name"].isin(indicators)].dropna(subset=["yoy_change_pct"]).copy()
+    if work.empty:
+        return go.Figure().update_layout(title="YoY change distribution by trade-war period", height=470)
+    y_col = "yoy_change_pct"
+    y_label = "YoY change (%)"
+    subtitle = ""
+    if robust_display:
+        bounds = work.groupby("indicator_name")["yoy_change_pct"].quantile([0.05, 0.95]).unstack()
+        lower = work["indicator_name"].map(bounds[0.05])
+        upper = work["indicator_name"].map(bounds[0.95])
+        work["display_yoy_change_pct"] = work["yoy_change_pct"].clip(lower=lower, upper=upper)
+        y_col = "display_yoy_change_pct"
+        y_label = "YoY change, clipped to 5th-95th percentile (%)"
+        subtitle = " (robust display)"
+    work["displayed_yoy"] = work[y_col].map(format_pct_plain)
+    work["original_yoy"] = work["yoy_change_pct"].map(format_pct_plain)
+    fig = px.box(
+        work,
+        x="period",
+        y=y_col,
+        color="indicator_name",
+        points="all",
+        category_orders={"period": PERIOD_ORDER},
+        custom_data=["country", "year", "period", "indicator_name", "displayed_yoy", "original_yoy"],
+        title=f"YoY change distribution by trade-war period{subtitle}",
+        labels={"period": "", y_col: y_label, "indicator_name": "Indicator"},
+    )
+    fig.update_traces(
+        hovertemplate=(
+            "<b>%{customdata[0]}</b><br>Year: %{customdata[1]}<br>Period: %{customdata[2]}"
+            "<br>Indicator: %{customdata[3]}<br>Displayed value: %{customdata[4]}"
+            "<br>Original value: %{customdata[5]}<extra></extra>"
+        )
+    )
+    fig.add_hline(y=0, line_width=1, line_dash="dash", line_color="#667085")
+    fig.update_layout(
+        height=470,
+        yaxis=dict(gridcolor="#e9edf3"),
+        legend=dict(orientation="h", y=-0.25, x=0),
+    )
+    return fig
+
+
+def make_trade_gdp_chart(df: pd.DataFrame) -> go.Figure:
+    work = df[df["indicator_name"] == TRADE_GDP].dropna(subset=["value"]).copy()
+    work["formatted_value"] = work["value"].map(format_pct_plain)
+    fig = px.line(
+        work,
+        x="year",
+        y="value",
+        color="country",
+        markers=True,
+        custom_data=["country", "period", "indicator_name", "formatted_value"],
+        title="Trade as a share of GDP",
+        labels={"year": "", "value": "Trade (% of GDP)", "country": "Country"},
+    )
+    fig.update_traces(
+        hovertemplate=(
+            "<b>%{customdata[0]}</b><br>Year: %{x}<br>Period: %{customdata[1]}"
+            "<br>Indicator: %{customdata[2]}<br>Displayed value: %{customdata[3]}"
+            "<br>Original value: %{y:.2f}%<extra></extra>"
+        )
+    )
+    fig.update_layout(
+        height=440,
+        yaxis=dict(ticksuffix="%", gridcolor="#e9edf3"),
+        xaxis=dict(dtick=1),
+        legend=dict(orientation="h", y=-0.25, x=0),
+    )
+    return fig
+
+
+def make_gdp_growth_period_chart(df: pd.DataFrame) -> go.Figure:
+    work = df[df["indicator_name"] == GDP_GROWTH].dropna(subset=["value"]).copy()
+    avg = (
+        work.groupby(["period", "country"], as_index=False)["value"]
+        .mean()
+        .rename(columns={"value": "avg_gdp_growth"})
+    )
+    if avg.empty:
+        return go.Figure().update_layout(title="Average GDP growth by period", height=440)
+    avg["displayed_value"] = avg["avg_gdp_growth"].map(format_pct_plain)
+    if avg["country"].nunique() > 6:
+        matrix = avg.pivot_table(index="country", columns="period", values="avg_gdp_growth", aggfunc="mean")
+        matrix = matrix.reindex(columns=[p for p in PERIOD_ORDER if p in matrix.columns])
+        fig = px.imshow(
+            matrix,
+            aspect="auto",
+            color_continuous_scale="RdBu",
+            color_continuous_midpoint=0,
+            title="Average GDP growth by period",
+            labels=dict(x="", y="", color="GDP growth (%)"),
+        )
+        fig.update_traces(
+            hovertemplate="<b>%{y}</b><br>Period: %{x}<br>Displayed value: %{z:.1f}%<br>Original value: %{z:.2f}%<extra></extra>"
+        )
+        fig.update_layout(height=440, margin=dict(l=0, r=0, t=56, b=0))
+        return fig
+    fig = px.bar(
+        avg,
+        x="period",
+        y="avg_gdp_growth",
+        color="country",
+        barmode="group",
+        category_orders={"period": PERIOD_ORDER},
+        custom_data=["country", "period", "displayed_value"],
+        title="Average GDP growth by period",
+        labels={"period": "", "avg_gdp_growth": "GDP growth (%)", "country": "Country"},
+    )
+    fig.update_traces(
+        hovertemplate=(
+            "<b>%{customdata[0]}</b><br>Period: %{customdata[1]}<br>Indicator: GDP growth"
+            "<br>Displayed value: %{customdata[2]}<br>Original value: %{y:.2f}%<extra></extra>"
+        )
+    )
+    fig.add_hline(y=0, line_width=1, line_dash="dash", line_color="#667085")
+    yaxis = dict(ticksuffix="%", gridcolor="#e9edf3")
+    if avg["avg_gdp_growth"].min() >= 0:
+        yaxis["rangemode"] = "tozero"
+    fig.update_layout(
+        height=440,
+        yaxis=yaxis,
+        legend=dict(orientation="h", y=-0.27, x=0),
+    )
+    return fig
+
+
+def make_fdi_inflows_chart(df: pd.DataFrame, display_mode: str = "Absolute USD") -> go.Figure:
+    work = df[df["indicator_name"] == FDI_INFLOW].dropna(subset=["value"]).copy()
+    if work.empty:
+        return go.Figure().update_layout(title="FDI net inflows by year", height=440)
+    y_col = "value"
+    y_label = "US dollars"
+    title_suffix = "current USD"
+    if display_mode == "Indexed to 100":
+        indexed_frames = []
+        for _, country_df in work.sort_values(["country", "year"]).groupby("country"):
+            base = country_df.loc[country_df["value"].notna() & (country_df["value"] != 0), "value"]
+            if base.empty:
+                continue
+            country_df = country_df.copy()
+            country_df["indexed_value"] = country_df["value"] / base.iloc[0] * 100
+            indexed_frames.append(country_df)
+        work = pd.concat(indexed_frames, ignore_index=True) if indexed_frames else work.iloc[0:0].copy()
+        y_col = "indexed_value"
+        y_label = "Index, first available year = 100"
+        title_suffix = "indexed to 100"
+        if work.empty:
+            return go.Figure().update_layout(title=f"FDI net inflows by year ({title_suffix})", height=440)
+    work["formatted_value"] = work["value"].map(format_usd)
+    if display_mode == "Indexed to 100":
+        work["displayed_value"] = work[y_col].map(lambda v: "n/a" if pd.isna(v) else f"{v:.1f}")
+    else:
+        work["displayed_value"] = work["formatted_value"]
+    fig = px.line(
+        work,
+        x="year",
+        y=y_col,
+        color="country",
+        markers=True,
+        custom_data=["country", "period", "indicator_name", "displayed_value", "formatted_value"],
+        title=f"FDI net inflows by year ({title_suffix})",
+        labels={"year": "", y_col: y_label, "country": "Country"},
+    )
+    fig.update_traces(
+        hovertemplate=(
+            "<b>%{customdata[0]}</b><br>Year: %{x}<br>Period: %{customdata[1]}"
+            "<br>Indicator: %{customdata[2]}<br>Displayed value: %{customdata[3]}"
+            "<br>Original value: %{customdata[4]}<extra></extra>"
+        )
+    )
+    fig.add_hline(y=0, line_width=1, line_dash="dash", line_color="#667085")
+    yaxis = dict(gridcolor="#e9edf3")
+    if display_mode == "Absolute USD":
+        yaxis["tickformat"] = "~s"
+    fig.update_layout(
+        height=440,
+        yaxis=yaxis,
+        xaxis=dict(dtick=1),
+        legend=dict(orientation="h", y=-0.25, x=0),
+    )
+    return fig
+
+
+def make_macro_performance_heatmap(df: pd.DataFrame) -> go.Figure:
+    indicator = GDP_GROWTH if GDP_GROWTH in df["indicator_name"].unique() else None
+    color_title = "Avg GDP growth (%)"
+    if indicator is None:
+        yoy = df.dropna(subset=["yoy_change_pct"]).copy()
+        if yoy.empty:
+            return go.Figure().update_layout(title="Macro performance by country and trade-war period", height=430)
+        heat = (
+            yoy.groupby(["country", "period"], as_index=False)["yoy_change_pct"]
+            .mean()
+            .rename(columns={"yoy_change_pct": "metric"})
+        )
+        color_title = "Avg YoY change (%)"
+    else:
+        heat = (
+            df[df["indicator_name"] == indicator]
+            .dropna(subset=["value"])
+            .groupby(["country", "period"], as_index=False)["value"]
+            .mean()
+            .rename(columns={"value": "metric"})
+        )
+    matrix = heat.pivot_table(index="country", columns="period", values="metric", aggfunc="mean")
+    matrix = matrix.reindex(columns=[p for p in PERIOD_ORDER if p in matrix.columns])
+    fig = px.imshow(
+        matrix,
+        aspect="auto",
+        color_continuous_scale="RdBu",
+        color_continuous_midpoint=0,
+        title="Macro performance by country and trade-war period",
+        labels=dict(x="", y="", color=color_title),
+    )
+    fig.update_traces(
+        hovertemplate="<b>%{y}</b><br>Period: %{x}<br>Displayed value: %{z:.1f}%<br>Original value: %{z:.2f}%<extra></extra>"
+    )
+    fig.update_layout(height=430, margin=dict(l=0, r=0, t=56, b=0))
+    return fig
+
+
+def make_macro_period_summary_table(df: pd.DataFrame) -> pd.DataFrame:
+    indicators = [EXPORTS, IMPORTS, TRADE_GDP, GDP_GROWTH, FDI_INFLOW]
+    summary = (
+        df[df["indicator_name"].isin(indicators)]
+        .groupby(["period", "indicator_name"], as_index=False)
+        .agg(
+            average_value=("value", "mean"),
+            median_yoy_change_pct=("yoy_change_pct", "median"),
+            observations=("value", "count"),
+        )
+    )
+    summary["period"] = pd.Categorical(summary["period"], categories=PERIOD_ORDER, ordered=True)
+    summary["indicator_label"] = summary["indicator_name"].map(short_indicator_name)
+    return summary.sort_values(["period", "indicator_name"])
 
 
 def make_macro_period_box(df: pd.DataFrame, indicator: str) -> go.Figure:
