@@ -925,57 +925,87 @@ def make_market_annual_heatmap(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def make_currency_rate_chart(df: pd.DataFrame) -> go.Figure:
+def make_currency_rate_chart(df: pd.DataFrame, indexed: bool = True) -> go.Figure:
+    work = df.copy()
+    if indexed:
+        first_rates = work.groupby("currency")["rate_vs_usd"].first()
+        work["indexed_to_100"] = work.apply(
+            lambda row: (row["rate_vs_usd"] / first_rates[row["currency"]] * 100)
+            if row["currency"] in first_rates and pd.notna(first_rates[row["currency"]])
+            else None,
+            axis=1,
+        )
+        y_col, y_label = "indexed_to_100", "Index, first observation = 100"
+        title = "Exchange-rate movement indexed to 100"
+    else:
+        y_col, y_label = "rate_vs_usd", "Currency units per USD"
+        title = "Exchange rates versus USD"
+    
     fig = px.line(
-        df,
+        work.dropna(subset=[y_col]),
         x="date",
-        y="rate_vs_usd",
+        y=y_col,
         color="currency",
-        title="Exchange rates versus USD",
-        labels={"date": "", "rate_vs_usd": "Currency units per USD", "currency": "Currency"},
+        title=title,
+        labels={"date": "", y_col: y_label, "currency": "Currency"},
     )
     fig.update_layout(height=460, legend=dict(orientation="h", y=-0.26, x=0), yaxis=dict(gridcolor="#e9edf3"))
     return fig
 
 
 def make_currency_volatility_chart(df: pd.DataFrame) -> go.Figure:
+    work = df.copy()
+    work.sort_values(["currency", "date"], inplace=True)
+    work["rolling_7d_vol_pct"] = (
+        work.groupby("currency")["pct_change_1d"]
+        .rolling(7, min_periods=1)
+        .std()
+        .reset_index(level=0, drop=True)
+    )
     fig = px.line(
-        df,
+        work.dropna(subset=["rolling_7d_vol_pct"]),
         x="date",
-        y="rolling_7d_vol",
+        y="rolling_7d_vol_pct",
         color="currency",
-        title="7-day exchange-rate volatility",
-        labels={"date": "", "rolling_7d_vol": "7-day volatility", "currency": "Currency"},
+        title="7-day volatility of daily percentage changes",
+        labels={"date": "", "rolling_7d_vol_pct": "7-day volatility (%)", "currency": "Currency"},
     )
     fig.update_layout(height=420, legend=dict(orientation="h", y=-0.28, x=0), yaxis=dict(gridcolor="#e9edf3"))
     return fig
 
 
 def make_currency_event_box(df: pd.DataFrame) -> go.Figure:
+    work = df.dropna(subset=["pct_change_1d"]).copy()
+    work["event_period"] = work["tariff_event_nearby"].map({True: "Near tariff events", False: "Normal days"})
+    work["abs_pct_change_1d"] = work["pct_change_1d"].abs()
     fig = px.box(
-        df.dropna(subset=["pct_change_1d"]),
-        x="tariff_event_nearby",
-        y="pct_change_1d",
-        color="currency",
-        title="One-day currency moves near tariff events",
-        labels={"tariff_event_nearby": "Tariff event nearby", "pct_change_1d": "1-day change (%)"},
+        work,
+        x="event_period",
+        y="abs_pct_change_1d",
+        color="event_period",
+        title="Absolute one-day currency moves near tariff events",
+        labels={"event_period": "Period", "abs_pct_change_1d": "Absolute 1-day change (%)"},
     )
-    fig.update_layout(height=420, legend=dict(orientation="h", y=-0.28, x=0), yaxis=dict(gridcolor="#e9edf3"))
+    fig.update_layout(height=420, showlegend=False, yaxis=dict(gridcolor="#e9edf3"))
     return fig
 
 
 def make_currency_latest_pressure(df: pd.DataFrame) -> go.Figure:
-    latest = make_latest_table(df, ["currency", "country"]).sort_values("pct_change_30d", ascending=False)
+    latest = make_latest_table(df, ["currency", "country"]).sort_values("pct_change_30d", ascending=False).copy()
+    latest["pressure_direction"] = latest["pct_change_30d"].apply(
+        lambda x: "Positive" if x >= 0 else "Negative"
+    )
     fig = px.bar(
         latest,
         x="currency",
         y="pct_change_30d",
-        color="country",
+        color="pressure_direction",
+        color_discrete_map={"Positive": "#4C78A8", "Negative": "#B15C63"},
         title="Latest 30-day exchange-rate pressure",
-        labels={"currency": "", "pct_change_30d": "30-day change (%)"},
+        labels={"currency": "Currency", "pct_change_30d": "30-day change (%)"},
     )
     fig.add_hline(y=0, line_width=1, line_dash="dash", line_color="#667085")
-    fig.update_layout(height=420, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.28, x=0))
+    fig.update_layout(height=420, xaxis=dict(gridcolor="#e9edf3"), yaxis=dict(gridcolor="#e9edf3"), showlegend=False)
     return fig
 
 
@@ -986,7 +1016,7 @@ def make_currency_change_heatmap(df: pd.DataFrame) -> go.Figure:
     fig = px.imshow(
         matrix,
         aspect="auto",
-        color_continuous_scale="RdBu",
+        color_continuous_scale="RdBu_r",
         color_continuous_midpoint=0,
         title="Average 30-day currency change by year",
         labels={"x": "Year", "y": "Currency", "color": "Avg 30-day change %"},
@@ -1000,14 +1030,12 @@ def make_sector_performance_chart(df: pd.DataFrame) -> go.Figure:
         df,
         x="date",
         y="indexed_to_100",
-        color="sector",
-        facet_col="country",
-        facet_col_wrap=3,
-        title="Sector performance indexed to 100",
-        labels={"date": "", "indexed_to_100": "Index", "sector": "Sector"},
+        color="sector_label",
+        title="Indexed performance by sector",
+        labels={"date": "", "indexed_to_100": "Index (start = 100)", "sector_label": "Sector"},
     )
-    fig.update_layout(height=560, legend=dict(orientation="h", y=-0.22, x=0))
-    fig.update_yaxes(matches=None, gridcolor="#e9edf3")
+    fig.update_layout(height=520, legend=dict(orientation="h", y=-0.22, x=0))
+    fig.update_yaxes(gridcolor="#e9edf3")
     return fig
 
 
@@ -1025,17 +1053,70 @@ def make_sector_latest_heatmap(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def make_sector_return_distribution(df: pd.DataFrame) -> go.Figure:
-    fig = px.violin(
-        df.dropna(subset=["daily_return_pct"]),
-        x="tariff_sensitivity",
+def make_sector_average_return_bar(df: pd.DataFrame) -> go.Figure:
+    work = df.dropna(subset=["daily_return_pct"]).copy()
+    avg = (
+        work.groupby("sector_label", as_index=False)
+        .agg(avg_return=("daily_return_pct", "mean"))
+        .sort_values("avg_return", ascending=False)
+    )
+    fig = px.bar(
+        avg,
+        x="avg_return",
+        y="sector_label",
+        orientation="h",
+        title="Average daily return by sector",
+        labels={"avg_return": "Avg daily return (%)", "sector_label": ""},
+    )
+    fig.add_vline(x=0, line_width=1, line_dash="dash", line_color="#667085")
+    fig.update_layout(height=520, yaxis=dict(autorange="reversed"), xaxis=dict(gridcolor="#e9edf3"))
+    return fig
+
+
+def make_sector_return_volatility_scatter(df: pd.DataFrame) -> go.Figure:
+    fig = px.scatter(
+        df.dropna(subset=["daily_return_pct", "volatility_10d"]),
+        x="volatility_10d",
         y="daily_return_pct",
         color="tariff_sensitivity",
-        box=True,
-        title="Daily return distribution by tariff sensitivity",
-        labels={"tariff_sensitivity": "Tariff sensitivity", "daily_return_pct": "Daily return (%)"},
+        hover_data={"sector_label": True, "country": True, "ticker": True, "date": True},
+        title="Return vs volatility",
+        labels={
+            "volatility_10d": "10-day volatility",
+            "daily_return_pct": "Daily return (%)",
+            "tariff_sensitivity": "Tariff sensitivity",
+        },
+    )
+    fig.add_hline(y=0, line_width=1, line_dash="dash", line_color="#667085")
+    fig.update_layout(height=460, xaxis=dict(gridcolor="#e9edf3"), yaxis=dict(gridcolor="#e9edf3"))
+    return fig
+
+
+def make_sector_volatility_boxplot(df: pd.DataFrame) -> go.Figure:
+    fig = px.box(
+        df.dropna(subset=["volatility_10d"]),
+        x="tariff_sensitivity",
+        y="volatility_10d",
+        color="tariff_sensitivity",
+        title="Volatility by tariff sensitivity",
+        labels={"tariff_sensitivity": "Tariff sensitivity", "volatility_10d": "10-day volatility"},
     )
     fig.update_layout(height=430, yaxis=dict(gridcolor="#e9edf3"))
+    return fig
+
+
+def make_sector_sensitivity_breakdown(df: pd.DataFrame) -> go.Figure:
+    latest = make_latest_table(df, ["country", "sector_label"])
+    counts = latest.groupby("tariff_sensitivity", as_index=False).size().sort_values("size", ascending=False)
+    fig = px.bar(
+        counts,
+        x="tariff_sensitivity",
+        y="size",
+        color="tariff_sensitivity",
+        title="Sector sensitivity breakdown",
+        labels={"tariff_sensitivity": "Tariff sensitivity", "size": "Sector-country pairs"},
+    )
+    fig.update_layout(height=420, xaxis=dict(gridcolor="#e9edf3"), yaxis=dict(gridcolor="#e9edf3"))
     return fig
 
 
@@ -1191,5 +1272,3 @@ def make_usa_adjustment_chart(inflation: pd.DataFrame, metrics: list[str]) -> go
     fig.update_yaxes(matches=None)
     fig.update_layout(height=max(420, 160 * len(metrics)), showlegend=False)
     return fig
-
-
