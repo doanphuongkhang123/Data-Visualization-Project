@@ -3,6 +3,24 @@ from core import *
 
 DEFAULT_METRICS = ["CPI", "PPI", "PCE", "Import Price Index"]
 DEFAULT_COUNTRIES = ["USA", "China", "European Union", "Japan", "South Korea", "Vietnam"]
+CURRENCY_TARIFF_ALIASES = {
+    "AUD": {"AUS", "Australia"},
+    "BRL": {"BRA", "Brazil"},
+    "CAD": {"CAN", "Canada"},
+    "CNY": {"CHN", "China"},
+    "EUR": {"EU", "EU27", "European Union"},
+    "GBP": {"GBR", "UK", "United Kingdom"},
+    "INR": {"IND", "India"},
+    "JPY": {"JPN", "Japan"},
+    "KRW": {"KOR", "South Korea"},
+    "MXN": {"MEX", "Mexico"},
+    "MYR": {"MYS", "Malaysia"},
+    "SGD": {"SGP", "Singapore"},
+    "THB": {"THA", "Thailand"},
+    "TWD": {"TWN", "Taiwan"},
+    "VND": {"VNM", "Vietnam"},
+}
+BROAD_TARGETS = {"ALL", "Global", "GLOBAL"}
 
 
 def format_usd_millions_as_billions(value: float) -> str:
@@ -208,16 +226,128 @@ def make_trade_balance_chart(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def make_currency_rate_chart(df: pd.DataFrame) -> go.Figure:
+def make_currency_rate_chart(df: pd.DataFrame, tariff: pd.DataFrame) -> go.Figure:
+    work = df.sort_values(["currency", "date"]).copy()
+    selected_currencies = set(work["currency"].dropna().unique())
+    selected_aliases = {
+        currency: CURRENCY_TARIFF_ALIASES.get(currency, {currency})
+        for currency in selected_currencies
+    }
+
     fig = px.line(
-        df,
+        work,
         x="date",
         y="rate_vs_usd",
         color="currency",
-        title="Currency rate versus USD by selected country/economy",
+        title="Currency rate versus USD with tariff-event markers",
         labels={"date": "", "rate_vs_usd": "Local currency units per USD", "currency": "Currency"},
     )
-    fig.update_layout(height=520, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.22, x=0))
+
+    start_date = work["date"].min()
+    end_date = work["date"].max()
+    if pd.notna(start_date) and pd.notna(end_date):
+        trade_war_1_start = max(pd.Timestamp("2018-03-01"), start_date)
+        trade_war_1_end = min(pd.Timestamp("2019-12-31"), end_date)
+        if trade_war_1_start <= trade_war_1_end:
+            fig.add_vrect(
+                x0=trade_war_1_start,
+                x1=trade_war_1_end,
+                fillcolor="#d9895b",
+                opacity=0.18,
+                line_width=0,
+                annotation_text="Trade War 1.0",
+                annotation_position="top left",
+            )
+
+        trade_war_2_start = max(pd.Timestamp("2024-01-01"), start_date)
+        if trade_war_2_start <= end_date:
+            fig.add_vrect(
+                x0=trade_war_2_start,
+                x1=end_date,
+                fillcolor="#b15c63",
+                opacity=0.18,
+                line_width=0,
+                annotation_text="Trade War 2.0",
+                annotation_position="top left",
+            )
+
+    tariff_events = tariff[(tariff["date"] >= start_date) & (tariff["date"] <= end_date)].copy()
+    target_marker_added = False
+    imposing_marker_added = False
+    selected_currency_set = set(work["currency"])
+
+    for _, event in tariff_events.sort_values("date").iterrows():
+        target_currencies = [
+            currency
+            for currency, aliases in selected_aliases.items()
+            if currency in selected_currency_set
+            and (event["target_country"] in aliases or event["target_country"] in BROAD_TARGETS)
+        ]
+        imposing_currencies = [
+            currency
+            for currency, aliases in selected_aliases.items()
+            if currency in selected_currency_set and event["imposing_country"] in aliases
+        ]
+
+        for currency in target_currencies:
+            series = work[(work["currency"] == currency) & (work["date"] <= event["date"])]
+            if series.empty:
+                continue
+            y_pos = series.iloc[-1]["rate_vs_usd"]
+            fig.add_trace(
+                go.Scatter(
+                    x=[event["date"]],
+                    y=[y_pos],
+                    mode="markers+text",
+                    marker=dict(symbol="triangle-up", size=12, color="#ff2b2b", line=dict(width=1, color="#b00020")),
+                    text=[f"{event['tariff_rate_pct']:.0f}%"],
+                    textposition="top right",
+                    textfont=dict(size=10, color="#6b1f1f"),
+                    name="Targeted by tariff" if not target_marker_added else None,
+                    showlegend=not target_marker_added,
+                    hovertemplate=(
+                        "Targeted by tariff<br>"
+                        f"Currency: {currency}<br>"
+                        "Date: %{x|%Y-%m-%d}<br>"
+                        f"Imposing: {event['imposing_country']}<br>"
+                        f"Target: {event['target_country']}<br>"
+                        f"Rate: {event['tariff_rate_pct']:.0f}%<br>"
+                        f"Sector: {event['sector']}<extra></extra>"
+                    ),
+                )
+            )
+            target_marker_added = True
+
+        for currency in imposing_currencies:
+            series = work[(work["currency"] == currency) & (work["date"] <= event["date"])]
+            if series.empty:
+                continue
+            y_pos = series.iloc[-1]["rate_vs_usd"]
+            fig.add_trace(
+                go.Scatter(
+                    x=[event["date"]],
+                    y=[y_pos],
+                    mode="markers+text",
+                    marker=dict(symbol="triangle-up", size=12, color="#1f77d0", line=dict(width=1, color="#0b4f9c")),
+                    text=[f"{event['tariff_rate_pct']:.0f}%"],
+                    textposition="bottom right",
+                    textfont=dict(size=10, color="#0b3d78"),
+                    name="Imposed tariff" if not imposing_marker_added else None,
+                    showlegend=not imposing_marker_added,
+                    hovertemplate=(
+                        "Imposed tariff<br>"
+                        f"Currency: {currency}<br>"
+                        "Date: %{x|%Y-%m-%d}<br>"
+                        f"Imposing: {event['imposing_country']}<br>"
+                        f"Target: {event['target_country']}<br>"
+                        f"Rate: {event['tariff_rate_pct']:.0f}%<br>"
+                        f"Sector: {event['sector']}<extra></extra>"
+                    ),
+                )
+            )
+            imposing_marker_added = True
+
+    fig.update_layout(height=560, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.22, x=0))
     return fig
 
 
@@ -288,6 +418,7 @@ def make_latest_currency_pressure_chart(df: pd.DataFrame) -> go.Figure:
 def render_inflation_currency_tab() -> None:
     inflation = load_inflation_data(INFLATION_PATH)
     currency = load_currency_data(CURRENCY_PATH)
+    tariff = load_tariff_data(TARIFF_PATH)
 
     st.markdown(
         """
@@ -388,11 +519,15 @@ def render_inflation_currency_tab() -> None:
         st.plotly_chart(make_china_trade_yoy_chart(inflation_all))
 
     st.subheader("Selected-country exchange-rate response")
-    st.caption("This section uses the selected currencies/countries from currency_impact.csv; it is not US-only unless USD-related comparison is shown.")
+    st.caption(
+        "This section uses the selected currencies/countries from currency_impact.csv. "
+        "Red triangles mark dates when the selected country/economy was targeted by a tariff; "
+        "blue triangles mark dates when it imposed a tariff on others."
+    )
     if currency_filtered.empty:
         st.info("No selected-country currency rows match the current filters.")
     else:
-        st.plotly_chart(make_currency_rate_chart(currency_filtered))
+        st.plotly_chart(make_currency_rate_chart(currency_filtered, tariff))
         left, right = st.columns(2)
         with left:
             st.plotly_chart(make_rolling_volatility_chart(currency_filtered))
