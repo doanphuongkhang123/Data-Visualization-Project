@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from core import *
 
 
@@ -492,4 +494,3 @@ def render_executive_overview_tab() -> None:
         """,
         unsafe_allow_html=True,
     )
-

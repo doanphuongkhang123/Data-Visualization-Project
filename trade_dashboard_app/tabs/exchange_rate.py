@@ -1,4 +1,6 @@
-﻿from core import *
+﻿from __future__ import annotations
+
+from core import *
 
 
 def render_exchange_rate_tab() -> None:
@@ -147,4 +149,3 @@ def render_exchange_rate_tab() -> None:
         """,
         unsafe_allow_html=True,
     )
-
