@@ -1,0 +1,184 @@
+Reporter,ReporterName,Continent,Year,Source
+C004,Afghanistan,Asia & Oceania,2019,comtrade
+C008,Albania,Europe,2020,comtrade
+C012,Algeria,Africa,2017,comtrade
+C024,Angola,Africa,2019,comtrade
+C028,Antigua and Barbuda,Americas,2019,comtrade
+C031,Azerbaijan,Asia & Oceania,2021,comtrade
+C032,Argentina,Americas,2020,comtrade
+C036,Australia,Asia & Oceania,2021,comtrade
+C040,Austria,Europe,2020,comtrade
+C044,Bahamas,Americas,2018,comtrade
+C048,"Bahrain, Kingdom of",Asia & Oceania,2019,comtrade
+C050,Bangladesh,Asia & Oceania,2015,comtrade
+C051,Armenia,Asia & Oceania,2021,comtrade
+C052,Barbados,Americas,2021,comtrade
+C056,Belgium,Europe,2021,comtrade
+C064,Bhutan,Asia & Oceania,2012,comtrade
+C068,Bolivia,Americas,2021,comtrade
+C070,Bosnia & Herzegovina,Europe,2020,comtrade
+C072,Botswana,Africa,2020,comtrade
+C076,Brazil,Americas,2020,comtrade
+C084,Belize,Americas,2021,comtrade
+C090,Solomon Islands,Asia & Oceania,2018,comtrade
+C096,Brunei Darussalam,Asia & Oceania,2020,comtrade
+C100,Bulgaria,Europe,2020,comtrade
+C104,Myanmar,Asia & Oceania,2020,comtrade
+C108,Burundi,Africa,2020,comtrade
+C112,Belarus,Europe,2021,comtrade
+C116,Cambodia,Asia & Oceania,2020,comtrade
+C120,Cameroon,Africa,2018,comtrade
+C124,Canada,Americas,2021,comtrade
+C132,Cabo Verde,Africa,2020,comtrade
+C140,Central African Republic,Africa,2018,comtrade
+C144,Sri Lanka,Asia & Oceania,2021,comtrade
+C148,Chad,Africa,2016,IDB
+C152,Chile,Americas,2021,comtrade
+C156,China,Asia & Oceania,2020,comtrade
+C158,"Taipei, Chinese",Asia & Oceania,2020,comtrade
+C170,Colombia,Americas,2020,comtrade
+C174,Comoros,Africa,2020,comtrade
+C178,Congo,Africa,2020,comtrade
+C180,Congo (DRC),Africa,2020,comtrade
+C188,Costa Rica,Americas,2020,comtrade
+C191,Croatia,Europe,2021,comtrade
+C192,Cuba,Americas,2020,IDB
+C196,Cyprus,Europe,2021,comtrade
+C203,Czech Republic,Europe,2021,comtrade
+C204,Benin,Africa,2021,comtrade
+C208,Denmark,Europe,2021,comtrade
+C212,Dominica,Americas,2012,comtrade
+C214,Dominican Republic,Americas,2020,comtrade
+C218,Ecuador,Americas,2021,comtrade
+C222,El Salvador,Americas,2021,comtrade
+C231,Ethiopia,Africa,2020,comtrade
+C233,Estonia,Europe,2021,comtrade
+C242,Fiji,Asia & Oceania,2021,comtrade
+C246,Finland,Europe,2021,comtrade
+C250,France,Europe,2020,comtrade
+C262,Djibouti,Africa,2009,comtrade
+C266,Gabon,Africa,2016,IDB
+C268,Georgia,Asia & Oceania,2021,comtrade
+C270,The Gambia,Africa,2020,comtrade
+C276,Germany,Europe,2021,comtrade
+C288,Ghana,Africa,2019,comtrade
+C300,Greece,Europe,2021,comtrade
+C308,Grenada,Americas,2021,comtrade
+C320,Guatemala,Americas,2021,comtrade
+C324,Guinea,Africa,2019,IDB
+C328,Guyana,Americas,2021,comtrade
+C332,Haiti,Americas,2014,IDB
+C340,Honduras,Americas,2019,comtrade
+C344,"Hong Kong, China",Asia & Oceania,2021,comtrade
+C348,Hungary,Europe,2021,comtrade
+C352,Iceland,Europe,2021,comtrade
+C356,India,Asia & Oceania,2021,comtrade
+C360,Indonesia,Asia & Oceania,2020,comtrade
+C364,Iran,Asia & Oceania,2018,comtrade
+C368,Iraq,Asia & Oceania,2014,comtrade
+C372,Ireland,Europe,2020,comtrade
+C376,Israel,Asia & Oceania,2020,comtrade
+C380,Italy,Europe,2021,comtrade
+C384,Côte d'Ivoire,Africa,2019,comtrade
+C388,Jamaica,Americas,2020,comtrade
+C392,Japan,Asia & Oceania,2021,comtrade
+C398,Kazakhstan,Asia & Oceania,2020,comtrade
+C400,Jordan,Asia & Oceania,2020,comtrade
+C404,Kenya,Africa,2021,comtrade
+C410,"Korea, Republic of",Asia & Oceania,2020,comtrade
+C414,"Kuwait, the State of",Asia & Oceania,2020,comtrade
+C417,Kyrgyz Republic,Asia & Oceania,2021,comtrade
+C418,Lao PDR,Asia & Oceania,2020,comtrade
+C422,Lebanese Republic,Asia & Oceania,2021,comtrade
+C426,Lesotho,Africa,2020,comtrade
+C428,Latvia,Europe,2021,comtrade
+C434,Libya,Africa,2018,comtrade
+C440,Lithuania,Europe,2021,comtrade
+C442,Luxembourg,Europe,2021,comtrade
+C446,"Macao, China",Asia & Oceania,2021,comtrade
+C450,Madagascar,Africa,2020,comtrade
+C454,Malawi,Africa,2020,comtrade
+C458,Malaysia,Asia & Oceania,2021,comtrade
+C462,Maldives,Asia & Oceania,2021,comtrade
+C466,Mali,Africa,2019,comtrade
+C470,Malta,Europe,2020,comtrade
+C478,Mauritania,Africa,2020,comtrade
+C480,Mauritius,Africa,2021,comtrade
+C484,Mexico,Americas,2021,comtrade
+C496,Mongolia,Asia & Oceania,2020,comtrade
+C498,"Moldova, Republic of",Europe,2021,comtrade
+C504,Morocco,Africa,2020,comtrade
+C508,Mozambique,Africa,2020,comtrade
+C512,Oman,Asia & Oceania,2018,comtrade
+C516,Namibia,Africa,2020,comtrade
+C524,Nepal,Asia & Oceania,2019,comtrade
+C528,Netherlands,Europe,2021,comtrade
+C548,Vanuatu,Asia & Oceania,2011,comtrade
+C554,New Zealand,Asia & Oceania,2021,comtrade
+C558,Nicaragua,Americas,2021,comtrade
+C562,Niger,Africa,2020,comtrade
+C566,Nigeria,Africa,2020,comtrade
+C578,Norway,Europe,2020,comtrade
+C586,Pakistan,Asia & Oceania,2021,comtrade
+C591,Panama,Americas,2019,IDB
+C598,Papua New Guinea,Asia & Oceania,2012,comtrade
+C600,Paraguay,Americas,2021,comtrade
+C604,Peru,Americas,2020,comtrade
+C608,Philippines,Asia & Oceania,2021,comtrade
+C616,Poland,Europe,2021,comtrade
+C620,Portugal,Europe,2021,comtrade
+C624,Guinea-Bissau,Africa,2008,IDB
+C626,Timor-Leste,Asia & Oceania,2017,comtrade
+C634,Qatar,Asia & Oceania,2020,comtrade
+C642,Romania,Europe,2021,comtrade
+C643,Russian Federation,Europe,2020,comtrade
+C646,Rwanda,Africa,2020,IDB
+C659,Saint Kitts and Nevis,Americas,2017,comtrade
+C662,Saint Lucia,Americas,2019,comtrade
+C670,Saint Vincent and the Grenadines,Americas,2019,comtrade
+C678,Sao Tomé and Principe,Africa,2020,comtrade
+C682,"Saudi Arabia, Kingdom of",Asia & Oceania,2020,comtrade
+C686,Senegal,Africa,2021,comtrade
+C690,Seychelles,Africa,2020,comtrade
+C694,Sierra Leone,Africa,2018,comtrade
+C702,Singapore,Asia & Oceania,2020,comtrade
+C703,Slovak Republic,Europe,2021,comtrade
+C704,Viet Nam,Asia & Oceania,2020,comtrade
+C705,Slovenia,Europe,2021,comtrade
+C710,South Africa,Africa,2020,comtrade
+C716,Zimbabwe,Africa,2020,comtrade
+C724,Spain,Europe,2021,comtrade
+C736,Sudan,Africa,2018,comtrade
+C740,Suriname,Americas,2019,comtrade
+C748,Eswatini,Africa,2020,comtrade
+C752,Sweden,Europe,2021,comtrade
+C756,Switzerland,Europe,2021,comtrade
+C760,Syrian Arab Republic,Asia & Oceania,2010,comtrade
+C762,Tajikistan,Asia & Oceania,2020,comtrade
+C764,Thailand,Asia & Oceania,2020,comtrade
+C768,Togo,Africa,2020,comtrade
+C776,Tonga,Asia & Oceania,2015,IDB
+C780,Trinidad and Tobago,Americas,2015,comtrade
+C784,United Arab Emirates,Asia & Oceania,2020,comtrade
+C788,Tunisia,Africa,2019,comtrade
+C792,Turkey,Asia & Oceania,2021,comtrade
+C795,Turkmenistan,Asia & Oceania,2000,comtrade
+C800,Uganda,Africa,2020,comtrade
+C804,Ukraine,Europe,2021,comtrade
+C807,North Macedonia,Europe,2020,comtrade
+C818,Egypt,Africa,2021,comtrade
+C826,United Kingdom,Europe,2021,comtrade
+C834,Tanzania,Africa,2021,comtrade
+C840,USA,Americas,2021,comtrade
+C854,Burkina Faso,Africa,2021,comtrade
+C858,Uruguay,Americas,2020,comtrade
+C860,Uzbekistan,Asia & Oceania,2021,comtrade
+C862,Venezuela,Americas,2015,IDB
+C882,Samoa,Asia & Oceania,2021,comtrade
+C887,Yemen,Asia & Oceania,2019,comtrade
+C892,Serbia,Europe,2021,comtrade
+C893,Montenegro,Europe,2021,comtrade
+C894,Zambia,Africa,2020,comtrade
+U918,European Union,Europe,2020,IDB
+ROW,the rest of the World,RoW,"",""
+WOR,World,World,"",""

@@ -1,0 +1,77 @@
+L3,L3Desc
+A01,Live animals
+A02,Meat and meat preparations
+B01,Milk and cream
+B09,Other dairy products
+B02,Cheese
+C09,Other plants and plant products
+C01,Vegetables and their preparations
+C02,"Fruits, nuts and their preparations"
+D01,Coffee
+D02,Tea and maté
+D03,Cocoa
+J02,Other products of animal origin
+E01,Cereals
+E03,Cereal preparations
+H01,Beverages and juices
+F01,Oilseeds
+F03,Animal fats
+F02,Vegetable oils
+F04,Animal feeds and other oil/fat products
+G00,Sugars and confectionery
+H02,"Beer, wines and spirits"
+H03,Tobacco
+I00,Cotton
+J01,Other products of vegetable origin
+K01,Fish and fish products
+L02,Other minerals
+L01,Mineral fuels
+L03,Fertilisers
+L04,Non-metallic mineral products
+L05,Non-ferrous metals
+L06,Iron and steel
+L07,Metal products
+M01,Crude oils
+M02,Petroleum oils (other than crude)
+N09,Other chemical products
+N01,Inorganic chemicals
+N02,Organic chemicals
+N03,Pharmaceutical
+N04,Plastics
+O01,Wood and wood products
+O03,"Pulp, paper and printed matter"
+O06,Furniture
+V09,Other manufactures
+P09,Other textile products
+P01,"Natural fibre, yarn and fabrics"
+P03,"Man-made fibre, yarn and fabrics"
+Q01,Clothing
+Q02,Clothing accessories
+R01,Rubber and rubber products
+R03,Leather and leather products
+R05,Footwear
+S05,Household equipment
+S03,Power generating equipment
+S02,Special-purpose machinery
+S01,General-purpose machinery
+S04,Computers and office machinery
+T09,Other electrical machinery
+T01,"Electric motors, generators and transformers"
+T06,Domestic appliances
+T04,Telecommunication equipement
+T03,Electronic components
+T05,Radio and TV apparatus
+T02,Equipment for distributing electricity
+U01,Railway and ships
+U09,Other transport equipment
+U02,Motor vehicles
+U03,Bicycles and motorcycles
+U05,Aircraft
+V05,Arms and ammunition
+V01,Optical and photographic products
+V02,Measuring instruments
+V03,Medical equipment
+V04,Clocks and watches
+V06,Recreational and sports products
+000,All Products
+Z99,Unspecified
