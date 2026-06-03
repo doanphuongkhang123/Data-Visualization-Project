@@ -3,6 +3,7 @@
 from core import configure_page
 from tabs.exchange_rate import render_exchange_rate_tab
 from tabs.financial_market import render_financial_market_tab
+from tabs.inflation_currency import render_inflation_currency_tab
 from tabs.macro_adjustment import render_macro_adjustment_tab
 from tabs.sector_impact import render_sector_impact_tab
 from tabs.tariff_tensions import render_tariff_tensions_tab
@@ -19,6 +20,7 @@ tabs = st.tabs(
         "Financial Market Reaction",
         "Exchange Rate Pressure",
         "Sectoral Impact",
+        "Inflation & Currency Response",
         "Vietnam Impact",
         "Long-term Macro Adjustment",
     ]
@@ -34,6 +36,8 @@ with tabs[3]:
 with tabs[4]:
     render_sector_impact_tab()
 with tabs[5]:
-    render_vietnam_impact_tab()
+    render_inflation_currency_tab()
 with tabs[6]:
+    render_vietnam_impact_tab()
+with tabs[7]:
     render_macro_adjustment_tab()
