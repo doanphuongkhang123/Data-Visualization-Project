@@ -122,9 +122,9 @@ def make_price_response_chart(df: pd.DataFrame) -> go.Figure:
     ].copy()
     core["display_metric"] = core["metric"].map(
         {
-            "CPI": "US CPI - All Items",
-            "PPI": "US PPI",
-            "PCE": "US PCE",
+            "CPI": "Consumer Price Index",
+            "PPI": "Producer Price Index",
+            "PCE": "Personal Consumption Expenditures",
         }
     )
     fig = px.line(
@@ -132,13 +132,17 @@ def make_price_response_chart(df: pd.DataFrame) -> go.Figure:
         x="date",
         y="value",
         color="display_metric",
-        facet_row="display_metric",
-        title="US CPI - All Items, US PPI, and US PCE over time",
-        labels={"date": "", "value": "US index/value", "display_metric": "US price metric"},
+        title="United States consumer, producer, and consumption price indexes",
+        labels={"date": "", "value": "Index value", "display_metric": "Price index"},
     )
-    fig.update_yaxes(matches=None, gridcolor="#e9edf3")
-    fig.for_each_annotation(lambda a: a.update(text=a.text.replace("display_metric=", "")))
-    fig.update_layout(height=560, showlegend=False)
+    fig.update_yaxes(gridcolor="#e9edf3")
+    fig.update_layout(
+        height=430,
+        showlegend=True,
+        title_font_size=14,
+        legend=dict(orientation="h", y=-0.18, x=0),
+        margin=dict(l=50, r=28, t=58, b=72),
+    )
     return fig
 
 
@@ -149,28 +153,36 @@ def make_import_price_chart(df: pd.DataFrame) -> go.Figure:
         x="date",
         y="value",
         color="series_label",
-        title="US import price index over time",
-        labels={"date": "", "value": "US import price index/value", "series_label": ""},
+        title="United States import price index",
+        labels={"date": "", "value": "Index value", "series_label": ""},
     )
-    fig.update_layout(height=430, yaxis=dict(gridcolor="#e9edf3"), showlegend=False)
+    fig.update_layout(height=310, yaxis=dict(gridcolor="#e9edf3"), showlegend=False, title_font_size=14, margin=dict(l=50, r=14, t=50, b=34))
     return fig
 
 
 def make_average_yoy_by_era_chart(df: pd.DataFrame) -> go.Figure:
     work = df.dropna(subset=["yoy_change_pct"]).copy()
+    era_display = {
+        "Pre-Trade War": "Pre-Trade<br>War",
+        "Trade War 1.0": "Trade War<br>1.0",
+        "Phase 1 + COVID": "Phase 1 +<br>COVID",
+        "Trade War 2.0": "Trade War<br>2.0",
+    }
+    work["era_display"] = work["era"].map(era_display).fillna(work["era"])
     avg = work.groupby(["era", "metric"], as_index=False)["yoy_change_pct"].mean()
+    avg["era_display"] = avg["era"].map(era_display).fillna(avg["era"])
     fig = px.bar(
         avg,
-        x="era",
+        x="era_display",
         y="yoy_change_pct",
         color="metric",
         barmode="group",
-        category_orders={"era": ERA_ORDER},
+        category_orders={"era_display": ["Pre-Trade<br>War", "Trade War<br>1.0", "Phase 1 +<br>COVID", "Trade War<br>2.0"]},
         color_discrete_sequence=px.colors.qualitative.Set2,
-        title="US average YoY change by selected metric and era",
-        labels={"era": "Trade-war era", "yoy_change_pct": "US average YoY change (%)", "metric": "US metric"},
+        title="Average year-over-year change by era",
+        labels={"era_display": "Trade-war era", "yoy_change_pct": "Year-over-year change (%)", "metric": "Metric"},
     )
-    fig.update_layout(height=430, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.28, x=0))
+    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=54, r=14, t=50, b=74))
     return fig
 
 
@@ -178,8 +190,8 @@ def make_china_trade_chart(df: pd.DataFrame) -> go.Figure:
     work = df[df["metric"].isin(["Imports from China", "Exports to China"])].copy()
     work["flow_label"] = work["metric"].map(
         {
-            "Imports from China": "US imports from China",
-            "Exports to China": "US exports to China",
+            "Imports from China": "United States imports from China",
+            "Exports to China": "United States exports to China",
         }
     )
     fig = px.line(
@@ -187,10 +199,10 @@ def make_china_trade_chart(df: pd.DataFrame) -> go.Figure:
         x="date",
         y="value",
         color="flow_label",
-        title="US imports from China vs US exports to China",
-        labels={"date": "", "value": "US trade value (USD millions)", "flow_label": "US-China flow"},
+        title="United States-China trade flows",
+        labels={"date": "", "value": "United States dollars<br>(millions)", "flow_label": "Trade flow"},
     )
-    fig.update_layout(height=430, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.22, x=0))
+    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.34, x=0), margin=dict(l=62, r=14, t=50, b=78))
     return fig
 
 
@@ -201,8 +213,8 @@ def make_china_trade_yoy_chart(df: pd.DataFrame) -> go.Figure:
     ].copy()
     work["flow_label"] = work["metric"].map(
         {
-            "Imports from China": "US imports from China",
-            "Exports to China": "US exports to China",
+            "Imports from China": "United States imports from China",
+            "Exports to China": "United States exports to China",
         }
     )
     fig = px.line(
@@ -210,11 +222,11 @@ def make_china_trade_yoy_chart(df: pd.DataFrame) -> go.Figure:
         x="date",
         y="yoy_change_pct",
         color="flow_label",
-        title="YoY change in US-China imports and exports",
-        labels={"date": "", "yoy_change_pct": "US-China YoY change (%)", "flow_label": "US-China flow"},
+        title="United States-China trade year-over-year change",
+        labels={"date": "", "yoy_change_pct": "Year-over-year change (%)", "flow_label": "Trade flow"},
     )
     fig.add_hline(y=0, line_dash="dash", line_color="#667085", line_width=1)
-    fig.update_layout(height=380, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.24, x=0))
+    fig.update_layout(height=300, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.34, x=0), margin=dict(l=54, r=14, t=50, b=78))
     return fig
 
 
@@ -227,17 +239,19 @@ def make_trade_balance_chart(df: pd.DataFrame) -> go.Figure:
             y=work["value"],
             mode="lines",
             fill="tozeroy",
-            name="US total trade balance",
+            name="United States total trade balance",
             line=dict(color="#b15c63", width=2.4),
             hovertemplate="%{x|%Y-%m-%d}<br>Value: %{y:,.2f}<extra></extra>",
         )
     )
     fig.add_hline(y=0, line_dash="dash", line_color="#667085", line_width=1)
     fig.update_layout(
-        title="US total trade balance over time",
-        height=430,
+        title="United States total trade balance",
+        height=310,
         xaxis=dict(title=""),
-        yaxis=dict(title="US trade balance (USD millions)", gridcolor="#e9edf3"),
+        yaxis=dict(title="United States dollars<br>(millions)", gridcolor="#e9edf3"),
+        title_font_size=14,
+        margin=dict(l=62, r=14, t=50, b=34),
     )
     return fig
 
@@ -255,8 +269,8 @@ def make_currency_rate_chart(df: pd.DataFrame, tariff: pd.DataFrame) -> go.Figur
         x="date",
         y="rate_vs_usd",
         color="currency",
-        title="Currency rate versus USD with tariff-event markers",
-        labels={"date": "", "rate_vs_usd": "Local currency units per USD", "currency": "Currency"},
+        title="Currency rate versus United States dollar",
+        labels={"date": "", "rate_vs_usd": "Local currency units<br>per United States dollar", "currency": "Currency"},
     )
 
     start_date = work["date"].min()
@@ -363,7 +377,7 @@ def make_currency_rate_chart(df: pd.DataFrame, tariff: pd.DataFrame) -> go.Figur
             )
             imposing_marker_added = True
 
-    fig.update_layout(height=560, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.22, x=0))
+    fig.update_layout(height=430, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.24, x=0), margin=dict(l=70, r=14, t=54, b=70))
     return fig
 
 
@@ -373,10 +387,10 @@ def make_rolling_volatility_chart(df: pd.DataFrame) -> go.Figure:
         x="date",
         y="rolling_7d_vol",
         color="currency",
-        title="Rolling 7-day currency volatility by selected country/economy",
-        labels={"date": "", "rolling_7d_vol": "7-day volatility", "currency": "Currency"},
+        title="Rolling 7-day currency volatility",
+        labels={"date": "", "rolling_7d_vol": "Volatility", "currency": "Currency"},
     )
-    fig.update_layout(height=430, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.24, x=0))
+    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=50, r=14, t=50, b=74))
     return fig
 
 
@@ -388,11 +402,11 @@ def make_currency_event_change_chart(df: pd.DataFrame) -> go.Figure:
         x="Event proximity",
         y="pct_change_1d",
         color="currency",
-        title="Currency change around tariff events by selected country/economy",
-        labels={"pct_change_1d": "1-day change (%)", "currency": "Currency"},
+        title="One-day currency change near tariff events",
+        labels={"pct_change_1d": "One-day change (%)", "currency": "Currency"},
     )
     fig.add_hline(y=0, line_dash="dash", line_color="#667085", line_width=1)
-    fig.update_layout(height=430, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.26, x=0))
+    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=54, r=14, t=50, b=74))
     return fig
 
 
@@ -407,11 +421,11 @@ def make_currency_event_average_chart(df: pd.DataFrame) -> go.Figure:
         y="abs_change_1d",
         color="Event proximity",
         barmode="group",
-        title="Average absolute one-day currency move by event proximity",
-        labels={"currency": "", "abs_change_1d": "Average absolute 1-day change (%)"},
+        title="Average absolute one-day currency move",
+        labels={"currency": "", "abs_change_1d": "Average absolute<br>one-day change (%)"},
         color_discrete_map={"Near tariff event": "#b15c63", "Not near event": "#4c78a8"},
     )
-    fig.update_layout(height=430, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.22, x=0))
+    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=62, r=14, t=50, b=74))
     return fig
 
 
@@ -423,11 +437,11 @@ def make_latest_currency_pressure_chart(df: pd.DataFrame) -> go.Figure:
         x="currency",
         y="pct_change_30d",
         color="country",
-        title="Latest 30-day currency pressure by selected country/economy",
-        labels={"currency": "", "pct_change_30d": "30-day change (%)", "country": "Country/economy"},
+        title="Latest 30-day currency pressure",
+        labels={"currency": "", "pct_change_30d": "30-day change (%)", "country": "Country"},
     )
     fig.add_hline(y=0, line_dash="dash", line_color="#667085", line_width=1)
-    fig.update_layout(height=420, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.24, x=0))
+    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=54, r=14, t=50, b=74))
     return fig
 
 
@@ -441,7 +455,7 @@ def render_inflation_currency_tab() -> None:
         <div class="page-title">
             <div>
                 <h1>Inflation & Currency Response</h1>
-                <p>Connecting tariff tension to US price pressure, US-China trade flows, the US total trade balance, and selected-country exchange-rate stress.</p>
+                <p>Connecting tariff tension to United States price pressure, United States-China trade flows, the United States total trade balance, and selected-country exchange-rate stress.</p>
             </div>
         </div>
         """,
@@ -478,85 +492,87 @@ def render_inflation_currency_tab() -> None:
     event_rows = int(currency_filtered["tariff_event_nearby"].sum()) if not currency_filtered.empty else 0
 
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Latest US CPI YoY", format_pct(latest_cpi.iloc[0]["yoy_change_pct"]) if not latest_cpi.empty else "n/a")
+    k1.metric("Latest United States CPI year-over-year", format_pct(latest_cpi.iloc[0]["yoy_change_pct"]) if not latest_cpi.empty else "n/a")
     k2.metric(
-        "Latest US import price YoY",
+        "Latest United States import price year-over-year",
         format_pct(latest_import_price.iloc[0]["yoy_change_pct"]) if not latest_import_price.empty else "n/a",
     )
     k3.metric(
-        "Latest US total trade balance",
+        "Latest United States total trade balance",
         format_usd_millions_as_billions(latest_trade_balance.iloc[0]["value"]) if not latest_trade_balance.empty else "n/a",
     )
-    k4.metric("Selected-country FX rows near tariff events", f"{event_rows:,}")
+    k4.metric("Selected-country currency rows near tariff events", f"{event_rows:,}")
 
-    st.subheader("US price pressure")
     price_response = inflation_all[
         ((inflation_all["metric"] == "CPI") & (inflation_all["category"] == "All Items"))
         | (inflation_all["metric"].isin(["PPI", "PCE"]))
     ]
-    if price_response.empty:
-        st.info("No US CPI/PPI/PCE rows match the current country/economy, era, and date filters.")
-    else:
-        st.plotly_chart(make_price_response_chart(inflation_all))
-
-    left, right = st.columns(2)
-    with left:
-        if inflation_all[inflation_all["metric"] == "Import Price Index"].empty:
-            st.info("No US import price index rows match the current filters.")
-        else:
-            st.plotly_chart(make_import_price_chart(inflation_all))
-    with right:
-        if metric_filtered.empty:
-            st.info("No selected metric rows match the current filters.")
-        else:
-            st.plotly_chart(make_average_yoy_by_era_chart(metric_filtered))
-
-    st.subheader("US-China trade and US total trade balance")
-    st.caption("Left: US bilateral goods trade with China. Right: US total goods and services trade balance with all trading partners.")
-    left, right = st.columns(2)
-    with left:
-        if inflation_all[inflation_all["metric"].isin(["Imports from China", "Exports to China"])].empty:
-            st.info("No US-China import/export rows match the current filters.")
-        else:
-            st.plotly_chart(make_china_trade_chart(inflation_all))
-    with right:
-        if inflation_all[inflation_all["metric"] == "Trade Balance"].empty:
-            st.info("No US total trade balance rows match the current filters.")
-        else:
-            st.plotly_chart(make_trade_balance_chart(inflation_all))
-
     trade_yoy = inflation_all[
         inflation_all["metric"].isin(["Imports from China", "Exports to China"])
         & inflation_all["yoy_change_pct"].notna()
     ]
-    if trade_yoy.empty:
-        st.info("No US-China import/export YoY rows match the current filters.")
-    else:
-        st.plotly_chart(make_china_trade_yoy_chart(inflation_all))
 
-    st.subheader("Selected-country exchange-rate response")
-    st.caption(
-        "This section uses the selected currencies/countries from currency_impact.csv. "
-        "Red triangles mark dates when the selected country/economy was targeted by a tariff; "
-        "blue triangles mark dates when it imposed a tariff on others."
-    )
-    if currency_filtered.empty:
-        st.info("No selected-country currency rows match the current filters.")
-    else:
-        st.plotly_chart(make_currency_rate_chart(currency_filtered, tariff))
-        left, right = st.columns(2)
-        with left:
-            st.plotly_chart(make_rolling_volatility_chart(currency_filtered))
-        with right:
-            st.plotly_chart(make_currency_event_change_chart(currency_filtered))
-        left, right = st.columns(2)
-        with left:
-            st.plotly_chart(make_currency_event_average_chart(currency_filtered))
-        with right:
-            st.plotly_chart(make_latest_currency_pressure_chart(currency_filtered))
+    left_panel, right_panel = st.columns([1.05, 1.25], gap="large")
+    with left_panel:
+        st.subheader("United States price and trade channel")
+        if price_response.empty:
+            st.info("No United States CPI/PPI/PCE rows match the current country/economy, era, and date filters.")
+        else:
+            st.plotly_chart(make_price_response_chart(inflation_all), use_container_width=True)
+
+        small_left, small_right = st.columns(2)
+        with small_left:
+            if inflation_all[inflation_all["metric"] == "Import Price Index"].empty:
+                st.info("No United States import price index rows match the current filters.")
+            else:
+                st.plotly_chart(make_import_price_chart(inflation_all), use_container_width=True)
+        with small_right:
+            if metric_filtered.empty:
+                st.info("No selected metric rows match the current filters.")
+            else:
+                st.plotly_chart(make_average_yoy_by_era_chart(metric_filtered), use_container_width=True)
+
+        st.caption("United States-China bilateral goods trade is shown beside the United States total goods and services trade balance.")
+        trade_left, trade_right = st.columns(2)
+        with trade_left:
+            if inflation_all[inflation_all["metric"].isin(["Imports from China", "Exports to China"])].empty:
+                st.info("No United States-China import/export rows match the current filters.")
+            else:
+                st.plotly_chart(make_china_trade_chart(inflation_all), use_container_width=True)
+        with trade_right:
+            if inflation_all[inflation_all["metric"] == "Trade Balance"].empty:
+                st.info("No United States total trade balance rows match the current filters.")
+            else:
+                st.plotly_chart(make_trade_balance_chart(inflation_all), use_container_width=True)
+
+        if trade_yoy.empty:
+            st.info("No United States-China import/export year-over-year rows match the current filters.")
+        else:
+            st.plotly_chart(make_china_trade_yoy_chart(inflation_all), use_container_width=True)
+
+    with right_panel:
+        st.subheader("Selected-country exchange-rate response")
+        st.caption(
+            "Red triangles mark dates when the selected country/economy was targeted by a tariff; "
+            "blue triangles mark dates when it imposed a tariff on others."
+        )
+        if currency_filtered.empty:
+            st.info("No selected-country currency rows match the current filters.")
+        else:
+            st.plotly_chart(make_currency_rate_chart(currency_filtered, tariff), use_container_width=True)
+            fx_left, fx_right = st.columns(2)
+            with fx_left:
+                st.plotly_chart(make_rolling_volatility_chart(currency_filtered), use_container_width=True)
+            with fx_right:
+                st.plotly_chart(make_currency_event_change_chart(currency_filtered), use_container_width=True)
+            fx_left, fx_right = st.columns(2)
+            with fx_left:
+                st.plotly_chart(make_currency_event_average_chart(currency_filtered), use_container_width=True)
+            with fx_right:
+                st.plotly_chart(make_latest_currency_pressure_chart(currency_filtered), use_container_width=True)
 
     with st.expander("Filtered data tables"):
-        st.markdown("US inflation, US macro, and US-China trade rows")
+        st.markdown("United States inflation, United States macro, and United States-China trade rows")
         st.dataframe(
             inflation_all.sort_values("date", ascending=False),
             width="stretch",
@@ -575,7 +591,7 @@ def render_inflation_currency_tab() -> None:
         f"""
         <div class="source-note">
             Sources: <code>{INFLATION_PATH}</code> and <code>{CURRENCY_PATH}</code>.
-            Inflation data covers US series, including US-China trade rows and US total trade balance. Currency data covers selected countries/economies.
+            Inflation data covers United States series, including United States-China trade rows and the United States total trade balance. Currency data covers selected countries/economies.
         </div>
         """,
         unsafe_allow_html=True,
