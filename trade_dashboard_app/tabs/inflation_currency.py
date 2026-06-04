@@ -10,30 +10,30 @@ PAGE5_BLUE = "#0072B2"
 PAGE5_ORANGE = "#D55E00"
 PAGE5_GREEN = "#009E73"
 CURRENCY_COLOR_MAP = {
-    "AUD": "#2a9d8f",
-    "CAD": "#8e5ea2",
-    "SGD": "#f4a261",
-    "CNY": "#6a994e",
-    "EUR": "#a17c6b",
-    "GBP": "#7f7f7f",
-    "INR": "#bc6c25",
-    "JPY": "#b08968",
-    "KRW": "#6d597a",
-    "MXN": "#588157",
-    "MYR": "#a98467",
-    "THB": "#7b2cbf",
-    "TWD": "#52796f",
-    "VND": "#2d6a4f",
+    "AUD": CVD_QUALITATIVE_COLORS[0],
+    "CAD": CVD_QUALITATIVE_COLORS[1],
+    "SGD": CVD_QUALITATIVE_COLORS[2],
+    "CNY": CVD_QUALITATIVE_COLORS[3],
+    "EUR": CVD_QUALITATIVE_COLORS[4],
+    "GBP": CVD_QUALITATIVE_COLORS[5],
+    "INR": CVD_QUALITATIVE_COLORS[6],
+    "JPY": CVD_QUALITATIVE_COLORS[7],
+    "KRW": CVD_QUALITATIVE_COLORS[8],
+    "MXN": CVD_QUALITATIVE_COLORS[9],
+    "MYR": CVD_QUALITATIVE_COLORS[0],
+    "THB": CVD_QUALITATIVE_COLORS[1],
+    "TWD": CVD_QUALITATIVE_COLORS[2],
+    "VND": CVD_QUALITATIVE_COLORS[3],
 }
 COUNTRY_COLOR_MAP = {
-    "Australia": "#2a9d8f",
-    "Canada": "#8e5ea2",
-    "Singapore": "#f4a261",
-    "China": "#6a994e",
-    "European Union": "#a17c6b",
-    "Japan": "#b08968",
-    "South Korea": "#6d597a",
-    "Vietnam": "#2d6a4f",
+    "Australia": CVD_QUALITATIVE_COLORS[0],
+    "Canada": CVD_QUALITATIVE_COLORS[1],
+    "Singapore": CVD_QUALITATIVE_COLORS[2],
+    "China": CVD_QUALITATIVE_COLORS[3],
+    "European Union": CVD_QUALITATIVE_COLORS[4],
+    "Japan": CVD_QUALITATIVE_COLORS[5],
+    "South Korea": CVD_QUALITATIVE_COLORS[6],
+    "Vietnam": CVD_QUALITATIVE_COLORS[7],
 }
 CURRENCY_TARIFF_ALIASES = {
     "AUD": {"AUS", "Australia"},
@@ -53,6 +53,10 @@ CURRENCY_TARIFF_ALIASES = {
     "VND": {"VNM", "Vietnam"},
 }
 BROAD_TARGETS = {"ALL", "Global", "GLOBAL"}
+TARGET_TARIFF_COLOR = "#D62728"
+TARGET_TARIFF_BORDER = "#7A0F14"
+IMPOSING_TARIFF_COLOR = "#1F77B4"
+IMPOSING_TARIFF_BORDER = "#0B3D78"
 ERA_CONTEXT_COLORS = {
     "Pre-Trade War": PERIOD_COLORS.get("Pre-Trade War", "#5B8C7A"),
     "Trade War 1.0": PERIOD_COLORS.get("Trade War 1.0", "#D9895B"),
@@ -193,6 +197,7 @@ def add_era_context_to_date_chart(
                 line_dash="dot",
                 line_color="#98a2b3",
                 opacity=0.75,
+                layer="below",
             )
     return fig
 
@@ -315,6 +320,7 @@ def make_price_response_chart(df: pd.DataFrame, compact: bool = False) -> go.Fig
         x="date",
         y="value",
         color="display_metric",
+        color_discrete_sequence=CVD_QUALITATIVE_COLORS,
         title="United States price indexes" if compact else "United States consumer, producer, and consumption price indexes",
         labels={"date": "Date", "value": "Index value", "display_metric": "Price index"},
     )
@@ -368,7 +374,7 @@ def make_average_yoy_by_era_chart(df: pd.DataFrame, compact: bool = False) -> go
             "period_display": ["Pre-Trade<br>War", "Trade War<br>1.0", "Recovery", "Trade War<br>2.0"],
             "metric": ["CPI", "Import Price Index", "PCE", "PPI"],
         },
-        color_discrete_sequence=px.colors.qualitative.Set2,
+        color_discrete_sequence=CVD_QUALITATIVE_COLORS,
         title="Average year-over-year change" if compact else "Average year-over-year change by period",
         labels={"period_display": "Trade-war period", "yoy_change_pct": "Year-over-year change (%)", "metric": "Metric"},
     )
@@ -417,6 +423,7 @@ def make_china_trade_chart(df: pd.DataFrame) -> go.Figure:
         x="date",
         y="value",
         color="flow_label",
+        color_discrete_sequence=CVD_QUALITATIVE_COLORS,
         title="United States-China trade flows",
         labels={"date": "Date", "value": "United States dollars<br>(millions)", "flow_label": "Trade flow"},
     )
@@ -482,6 +489,7 @@ def make_currency_rate_chart(df: pd.DataFrame, tariff: pd.DataFrame, compact: bo
     target_marker_added = False
     imposing_marker_added = False
     selected_currency_set = set(work["currency"])
+    tariff_marker_traces: list[go.Scatter] = []
 
     for _, event in tariff_events.sort_values("date").iterrows():
         target_currencies = [
@@ -501,17 +509,41 @@ def make_currency_rate_chart(df: pd.DataFrame, tariff: pd.DataFrame, compact: bo
             if series.empty:
                 continue
             y_pos = series.iloc[-1]["rate_vs_usd"]
-            fig.add_trace(
+            tariff_marker_traces.append(
+                go.Scatter(
+                    x=[event["date"]],
+                    y=[y_pos],
+                    mode="markers",
+                    marker=dict(
+                        symbol="triangle-up",
+                        size=17 if compact else 19,
+                        color="#ffffff",
+                        opacity=1,
+                        line=dict(width=0),
+                    ),
+                    showlegend=False,
+                    hoverinfo="skip",
+                    cliponaxis=False,
+                )
+            )
+            tariff_marker_traces.append(
                 go.Scatter(
                     x=[event["date"]],
                     y=[y_pos],
                     mode="markers+text",
-                    marker=dict(symbol="triangle-up", size=10 if compact else 12, color="#ff2b2b", line=dict(width=1, color="#b00020")),
+                    marker=dict(
+                        symbol="triangle-up",
+                        size=12 if compact else 14,
+                        color=TARGET_TARIFF_COLOR,
+                        opacity=1,
+                        line=dict(width=2, color=TARGET_TARIFF_BORDER),
+                    ),
                     text=[f"{event['tariff_rate_pct']:.0f}%"],
                     textposition="top right",
-                    textfont=dict(size=8 if compact else 10, color="#6b1f1f"),
+                    textfont=dict(size=8 if compact else 10, color=TARGET_TARIFF_BORDER),
                     name="Targeted by tariff" if not target_marker_added else None,
                     showlegend=not target_marker_added,
+                    cliponaxis=False,
                     hovertemplate=(
                         "Targeted by tariff<br>"
                         f"Currency: {currency}<br>"
@@ -530,17 +562,41 @@ def make_currency_rate_chart(df: pd.DataFrame, tariff: pd.DataFrame, compact: bo
             if series.empty:
                 continue
             y_pos = series.iloc[-1]["rate_vs_usd"]
-            fig.add_trace(
+            tariff_marker_traces.append(
+                go.Scatter(
+                    x=[event["date"]],
+                    y=[y_pos],
+                    mode="markers",
+                    marker=dict(
+                        symbol="triangle-up",
+                        size=17 if compact else 19,
+                        color="#ffffff",
+                        opacity=1,
+                        line=dict(width=0),
+                    ),
+                    showlegend=False,
+                    hoverinfo="skip",
+                    cliponaxis=False,
+                )
+            )
+            tariff_marker_traces.append(
                 go.Scatter(
                     x=[event["date"]],
                     y=[y_pos],
                     mode="markers+text",
-                    marker=dict(symbol="triangle-up", size=10 if compact else 12, color="#1f77d0", line=dict(width=1, color="#0b4f9c")),
+                    marker=dict(
+                        symbol="triangle-up",
+                        size=12 if compact else 14,
+                        color=IMPOSING_TARIFF_COLOR,
+                        opacity=1,
+                        line=dict(width=2, color=IMPOSING_TARIFF_BORDER),
+                    ),
                     text=[f"{event['tariff_rate_pct']:.0f}%"],
                     textposition="bottom right",
-                    textfont=dict(size=8 if compact else 10, color="#0b3d78"),
+                    textfont=dict(size=8 if compact else 10, color=IMPOSING_TARIFF_BORDER),
                     name="Imposed tariff" if not imposing_marker_added else None,
                     showlegend=not imposing_marker_added,
+                    cliponaxis=False,
                     hovertemplate=(
                         "Imposed tariff<br>"
                         f"Currency: {currency}<br>"
@@ -553,6 +609,9 @@ def make_currency_rate_chart(df: pd.DataFrame, tariff: pd.DataFrame, compact: bo
                 )
             )
             imposing_marker_added = True
+
+    for marker_trace in tariff_marker_traces:
+        fig.add_trace(marker_trace)
 
     if compact:
         fig.update_layout(
