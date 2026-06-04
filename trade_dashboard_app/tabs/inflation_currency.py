@@ -212,17 +212,11 @@ def render_kpi_row(items: list[tuple[str, str, str]]) -> None:
 
 def filter_inflation_currency_data(inflation: pd.DataFrame, currency: pd.DataFrame):
     metric_options = sorted(inflation["metric"].dropna().unique())
-    era_options = [
-        ERA_TO_PERIOD_LABEL.get(era, era)
-        for era in ERA_ORDER
-        if era in set(inflation["era"].dropna())
-    ]
-    period_to_era = {ERA_TO_PERIOD_LABEL.get(era, era): era for era in ERA_ORDER}
     country_options = sorted(currency["country"].dropna().unique())
     default_countries = [country for country in DEFAULT_COUNTRIES if country in country_options]
 
-    c_year, c1, c2, c3, c4 = st.columns(
-        [1.15, 1.0, 0.8, 1.2, 0.95],
+    c_year, c1, c2, c3 = st.columns(
+        4,
         vertical_alignment="bottom",
     )
     with c1:
@@ -233,8 +227,6 @@ def filter_inflation_currency_data(inflation: pd.DataFrame, currency: pd.DataFra
             "page5_metrics",
         )
     with c2:
-        selected_periods = _checkbox_dropdown("Period", era_options, era_options, "page5_periods")
-    with c3:
         selected_countries = _checkbox_dropdown(
             "Country / economy",
             country_options,
@@ -244,7 +236,7 @@ def filter_inflation_currency_data(inflation: pd.DataFrame, currency: pd.DataFra
 
     currency_base = currency[currency["country"].isin(selected_countries)].copy()
     currency_options = sorted(currency_base["currency"].dropna().unique())
-    with c4:
+    with c3:
         selected_currencies = _checkbox_dropdown(
             "Currency",
             currency_options,
@@ -252,8 +244,7 @@ def filter_inflation_currency_data(inflation: pd.DataFrame, currency: pd.DataFra
             "page5_currencies",
         )
 
-    selected_eras = [period_to_era.get(period, period) for period in selected_periods]
-    inflation_base = inflation[inflation["era"].isin(selected_eras)].copy()
+    inflation_base = inflation.copy()
     inflation_base["period"] = inflation_base["era"].replace(ERA_TO_PERIOD_LABEL)
     currency_base = currency_base[currency_base["currency"].isin(selected_currencies)].copy()
 
@@ -264,7 +255,7 @@ def filter_inflation_currency_data(inflation: pd.DataFrame, currency: pd.DataFra
         date_bounds.append((currency_base["date"].min(), currency_base["date"].max()))
 
     if not date_bounds:
-        st.warning("No rows are available for the selected metric, era, country, and currency filters.")
+        st.warning("No rows are available for the selected metric, country, and currency filters.")
         return inflation.iloc[0:0].copy(), inflation.iloc[0:0].copy(), currency.iloc[0:0].copy(), selected_metrics
 
     min_date = min(start for start, _ in date_bounds).date()
