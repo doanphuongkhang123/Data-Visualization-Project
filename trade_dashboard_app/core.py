@@ -54,6 +54,20 @@ PERIOD_COLORS = {
     "Recovery": "#4C78A8",
     "Trade War 2.0": "#B15C63",
 }
+CVD_QUALITATIVE_COLORS = [
+    "#0072B2",
+    "#D55E00",
+    "#009E73",
+    "#CC79A7",
+    "#56B4E9",
+    "#E69F00",
+    "#332288",
+    "#88CCEE",
+    "#117733",
+    "#882255",
+]
+RETURN_COLORS = {"Positive": "#0072B2", "Negative": "#D55E00"}
+SENSITIVITY_COLORS = {"High": "#D55E00", "Medium": "#0072B2", "Low": "#009E73"}
 
 ENTITY_META = {
     "USA": {"label": "United States", "iso3": "USA", "region": "North America"},
@@ -1075,10 +1089,12 @@ def make_sector_performance_chart(df: pd.DataFrame) -> go.Figure:
         color="sector_label",
         facet_col="tariff_sensitivity",
         category_orders={"tariff_sensitivity": present_sens},
-        title="Indexed performance by sector",
+        title="Indexed performance by sector (start = 100)",
         labels={"date": "", "indexed_to_100": "Index (start = 100)", "sector_label": "Sector"},
     )
     fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+    fig.update_traces(opacity=0.82, line=dict(width=1.9))
+    fig.add_hline(y=100, line_width=1, line_dash="dash", line_color="#667085")
     fig.update_layout(height=520, legend=dict(orientation="h", y=-0.22, x=0))
     fig.update_yaxes(gridcolor="#e9edf3")
     return fig
@@ -1113,16 +1129,17 @@ def make_sector_average_return_bar(df: pd.DataFrame) -> go.Figure:
         x="avg_return",
         y="sector_label",
         color="tariff_sensitivity",
+        color_discrete_map=SENSITIVITY_COLORS,
         category_orders={
             "tariff_sensitivity": ["High", "Medium", "Low"],
             "sector_label": avg["sector_label"].tolist()
         },
         orientation="h",
-        title="Average daily return by sector",
-        labels={"avg_return": "Avg daily return (%)", "sector_label": ""},
+        title="Average daily return by sector (%)",
+        labels={"avg_return": "Avg daily return (%)", "sector_label": "", "tariff_sensitivity": "Tariff sensitivity"},
     )
     fig.add_vline(x=0, line_width=1, line_dash="dash", line_color="#667085")
-    fig.update_layout(height=520, showlegend=False, yaxis=dict(autorange="reversed"), xaxis=dict(gridcolor="#e9edf3"))
+    fig.update_layout(height=520, showlegend=False, yaxis=dict(autorange="reversed"), xaxis=dict(gridcolor="#e9edf3", rangemode="tozero"))
     return fig
 
 
@@ -1135,34 +1152,46 @@ def make_sector_return_volatility_scatter(df: pd.DataFrame) -> go.Figure:
         work,
         x="volatility_10d",
         y="daily_return_pct",
-        color="tariff_sensitivity",
+        color="country",
         facet_col="tariff_sensitivity",
         category_orders={"tariff_sensitivity": present_sens},
         hover_data={"sector_label": True, "country": True, "ticker": True, "date": True},
-        title="Return vs volatility",
+        title="Daily return vs 10-day volatility",
         labels={
-            "volatility_10d": "10-day volatility",
+            "volatility_10d": "10-day volatility (%)",
             "daily_return_pct": "Daily return (%)",
             "tariff_sensitivity": "Tariff sensitivity",
+            "country": "Country",
         },
     )
     fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+    fig.update_traces(opacity=0.62, marker=dict(size=6, line=dict(width=0.6, color="#ffffff")))
     fig.add_hline(y=0, line_width=1, line_dash="dash", line_color="#667085")
     fig.update_layout(height=460, showlegend=False, xaxis=dict(gridcolor="#e9edf3"), yaxis=dict(gridcolor="#e9edf3"))
     return fig
 
 
 def make_sector_volatility_boxplot(df: pd.DataFrame) -> go.Figure:
+    work = df.dropna(subset=["volatility_10d"]).copy()
+    if work.empty:
+        return go.Figure().update_layout(title="Volatility by tariff sensitivity", height=430)
+    y_max = work["volatility_10d"].quantile(0.95) * 1.08
     fig = px.box(
-        df.dropna(subset=["volatility_10d"]),
+        work,
         x="tariff_sensitivity",
         y="volatility_10d",
         color="tariff_sensitivity",
+        color_discrete_map=SENSITIVITY_COLORS,
         points=False,
-        title="Volatility by tariff sensitivity",
-        labels={"tariff_sensitivity": "Tariff sensitivity", "volatility_10d": "10-day volatility"},
+        category_orders={"tariff_sensitivity": ["High", "Medium", "Low"]},
+        title="Volatility by tariff sensitivity<br><sup>Outlier points hidden; y-axis zoomed to the 95th percentile.</sup>",
+        labels={"tariff_sensitivity": "Tariff sensitivity", "volatility_10d": "10-day volatility (%)"},
     )
-    fig.update_layout(height=430, yaxis=dict(gridcolor="#e9edf3"))
+    fig.update_layout(
+        height=430,
+        yaxis=dict(gridcolor="#e9edf3", range=[0, y_max]),
+        showlegend=False,
+    )
     return fig
 
 
@@ -1179,11 +1208,12 @@ def make_sector_sensitivity_breakdown(df: pd.DataFrame) -> go.Figure:
         x="tariff_sensitivity",
         y="count",
         color="tariff_sensitivity",
+        color_discrete_map=SENSITIVITY_COLORS,
         category_orders={"tariff_sensitivity": present_sens},
         title="Sector sensitivity breakdown",
         labels={"tariff_sensitivity": "Tariff sensitivity", "count": "Sector-country pairs"},
     )
-    fig.update_layout(height=260, showlegend=False, yaxis=dict(gridcolor="#e9edf3"))
+    fig.update_layout(height=260, showlegend=False, yaxis=dict(gridcolor="#e9edf3", rangemode="tozero"))
     return fig
 
 
@@ -1374,6 +1404,37 @@ def _context_year_range(df: pd.DataFrame) -> list[float] | None:
     return [int(years.min()) - 0.5, int(years.max()) + 0.5]
 
 
+def _add_line_end_labels(fig: go.Figure, max_traces: int = 6) -> go.Figure:
+    visible_traces = [
+        trace
+        for trace in fig.data
+        if getattr(trace, "mode", "") and "lines" in trace.mode and getattr(trace, "name", None)
+    ]
+    if len(visible_traces) > max_traces:
+        return fig
+    for trace in visible_traces:
+        points = [
+            (x, y)
+            for x, y in zip(trace.x, trace.y)
+            if x is not None and y is not None and not pd.isna(y)
+        ]
+        if not points:
+            continue
+        x, y = points[-1]
+        fig.add_annotation(
+            x=x,
+            y=y,
+            text=trace.name,
+            xanchor="left",
+            xshift=6,
+            showarrow=False,
+            font=dict(size=10, color=getattr(trace.line, "color", "#20242a")),
+            bgcolor="rgba(255,255,255,0.72)",
+        )
+    fig.update_layout(showlegend=False)
+    return fig
+
+
 def make_trade_import_export_chart(
     df: pd.DataFrame,
     trade_flow: str,
@@ -1405,7 +1466,7 @@ def make_trade_import_export_chart(
         markers=True,
         color_discrete_map=country_color_map,
         custom_data=["country", "period", "indicator_name", "formatted_value"],
-        title=f"{title}<br><sup>Values shown in current USD.</sup>",
+        title=f"{title} (current USD)<br><sup>Values shown in current USD.</sup>",
         labels={"year": "", "value": "US dollars", "country": "Country"},
     )
     fig.update_traces(
@@ -1424,6 +1485,7 @@ def make_trade_import_export_chart(
         xaxis=dict(dtick=1, range=x_range),
         legend=dict(orientation="h", y=-0.25, x=0),
     )
+    _add_line_end_labels(fig)
     return fig
 
 
@@ -1491,7 +1553,7 @@ def make_trade_gdp_chart(
         markers=True,
         color_discrete_map=country_color_map,
         custom_data=["country", "period", "indicator_name", "formatted_value"],
-        title="Trade as a share of GDP",
+        title="Trade share of GDP (%)",
         labels={"year": "", "value": "Trade (% of GDP)", "country": "Country"},
     )
     fig.update_traces(
@@ -1508,6 +1570,7 @@ def make_trade_gdp_chart(
         legend=dict(orientation="h", y=-0.25, x=0),
     )
     _add_period_context_to_year_chart(fig, df)
+    _add_line_end_labels(fig)
     return fig
 
 
@@ -1525,9 +1588,9 @@ def make_gdp_growth_period_chart(df: pd.DataFrame, height: int = 440) -> go.Figu
     fig = px.imshow(
         matrix,
         aspect="auto",
-        color_continuous_scale="RdBu",
+        color_continuous_scale="RdBu_r",
         color_continuous_midpoint=0,
-        title="Average GDP growth by period",
+        title="Average GDP growth by period (%)",
         labels=dict(x="", y="", color="GDP growth (%)"),
     )
     fig.update_traces(
@@ -1598,6 +1661,7 @@ def make_fdi_inflows_chart(
         legend=dict(orientation="h", y=-0.25, x=0),
     )
     _add_period_context_to_year_chart(fig, df)
+    _add_line_end_labels(fig)
     return fig
 
 
