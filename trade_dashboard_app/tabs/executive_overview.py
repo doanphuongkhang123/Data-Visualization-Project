@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from core import *
 
 
@@ -9,8 +11,9 @@ ACCENT_CORAL = "#b15c63"
 ACCENT_GOLD = "#d9895b"
 ACCENT_BLUE = "#4c78a8"
 ACCENT_PURPLE = "#7b61a8"
+ACCENT_SIMPLE = "#2f3a4a"
 
-KPI_PALETTE = [ACCENT_TEAL, ACCENT_BLUE, ACCENT_GOLD, ACCENT_CORAL, ACCENT_PURPLE]
+KPI_PALETTE = [ACCENT_SIMPLE] * 5
 BAR_COLOR_SCALE = [
     [0, "#e0f0ee"],
     [0.35, "#88c4bc"],
@@ -240,7 +243,7 @@ def _chart_trend_over_time(df: pd.DataFrame) -> go.Figure:
 
     fig.update_layout(
         title=dict(text="Tariff Activity & Average Rate by Year", font=dict(size=17)),
-        height=420,
+        height=260,
         margin=dict(l=0, r=10, t=56, b=0),
         legend=dict(orientation="h", y=-0.18, x=0.5, xanchor="center"),
         xaxis=dict(title="", dtick=1, gridcolor="#eef1f6"),
@@ -291,7 +294,7 @@ def _chart_top_targets(df: pd.DataFrame) -> go.Figure:
     )
     fig.update_layout(
         title=dict(text="Most Frequently Targeted Countries", font=dict(size=17)),
-        height=420,
+        height=260,
         margin=dict(l=0, r=40, t=56, b=0),
         coloraxis_showscale=False,
         yaxis=dict(autorange="reversed", tickfont=dict(size=12)),
@@ -335,7 +338,7 @@ def _chart_top_sectors(df: pd.DataFrame) -> go.Figure:
     )
     fig.update_layout(
         title=dict(text="Top Affected Sectors", font=dict(size=17)),
-        height=420,
+        height=260,
         margin=dict(l=0, r=40, t=56, b=0),
         coloraxis_showscale=False,
         yaxis=dict(tickfont=dict(size=11)),
@@ -379,9 +382,9 @@ def _chart_action_type_breakdown(df: pd.DataFrame) -> go.Figure:
                 colors=colors,
                 line=dict(color="#ffffff", width=2),
             ),
-            textinfo="label+percent",
-            textposition="outside",
-            textfont=dict(size=11),
+            textinfo="percent",
+            textposition="inside",
+            textfont=dict(size=11, color="#ffffff"),
             hovertext=hover_texts,
             hoverinfo="text",
             pull=[0.03 if i == 0 else 0 for i in range(len(type_counts))],
@@ -390,9 +393,17 @@ def _chart_action_type_breakdown(df: pd.DataFrame) -> go.Figure:
 
     fig.update_layout(
         title=dict(text="Action Type Distribution", font=dict(size=17)),
-        height=420,
-        margin=dict(l=10, r=10, t=56, b=10),
-        showlegend=False,
+        height=260,
+        margin=dict(l=10, r=130, t=56, b=10),
+        showlegend=True,
+        legend=dict(
+            orientation="v",
+            x=1.02,
+            y=0.5,
+            xanchor="left",
+            yanchor="middle",
+            font=dict(size=11),
+        ),
         plot_bgcolor="#ffffff",
         annotations=[
             dict(
@@ -402,6 +413,173 @@ def _chart_action_type_breakdown(df: pd.DataFrame) -> go.Figure:
                 showarrow=False,
             )
         ],
+    )
+    return fig
+
+
+# ── Chart E: Country Action Flow (node graph) ─────────────────────────
+def _chart_country_action_flow(
+    df: pd.DataFrame,
+    year_filter: int | None,
+) -> go.Figure:
+    work = df.copy()
+    if year_filter is not None:
+        work = work[work["year"] == year_filter]
+
+    flow = (
+        work.groupby(["imposing_clean", "target_clean"], as_index=False)
+        .size()
+        .rename(columns={"size": "events"})
+    )
+    if flow.empty:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="No tariff actions for the selected year.",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+            font=dict(size=13, color="#667085"),
+        )
+        fig.update_layout(height=260, margin=dict(l=0, r=0, t=40, b=0))
+        return fig
+
+    involvement = pd.concat(
+        [
+            flow[["imposing_clean", "events"]].rename(
+                columns={"imposing_clean": "country"}
+            ),
+            flow[["target_clean", "events"]].rename(
+                columns={"target_clean": "country"}
+            ),
+        ],
+        ignore_index=True,
+    )
+    top_nodes = (
+        involvement.groupby("country", as_index=False)["events"]
+        .sum()
+        .sort_values("events", ascending=False)
+        .head(12)
+    )
+    node_set = set(top_nodes["country"].tolist())
+    flow = flow[
+        flow["imposing_clean"].isin(node_set)
+        & flow["target_clean"].isin(node_set)
+    ].copy()
+
+    if flow.empty:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="Not enough data to show a country network for this year.",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+            font=dict(size=13, color="#667085"),
+        )
+        fig.update_layout(height=260, margin=dict(l=0, r=0, t=40, b=0))
+        return fig
+
+    nodes = sorted(node_set)
+    node_labels = [entity_label(c) for c in nodes]
+    node_metrics = (
+        involvement.groupby("country", as_index=False)["events"]
+        .sum()
+        .set_index("country")["events"]
+    )
+
+    count = len(nodes)
+    angles = [2 * math.pi * i / count for i in range(count)]
+    radius = 0.38
+    positions = {
+        node: (0.5 + radius * math.cos(angle), 0.5 + radius * math.sin(angle))
+        for node, angle in zip(nodes, angles)
+    }
+
+    metric_values = [node_metrics.get(node, 0) for node in nodes]
+    min_size, max_size = 14, 28
+    if metric_values:
+        min_val, max_val = min(metric_values), max(metric_values)
+        if max_val > min_val:
+            sizes = [
+                min_size + (val - min_val) / (max_val - min_val) * (max_size - min_size)
+                for val in metric_values
+            ]
+        else:
+            sizes = [min_size for _ in metric_values]
+    else:
+        sizes = [min_size for _ in nodes]
+
+    x_nodes = [positions[node][0] for node in nodes]
+    y_nodes = [positions[node][1] for node in nodes]
+    hover_nodes = [
+        f"<b>{label}</b><br>Actions involved: {node_metrics.get(node, 0)}"
+        for node, label in zip(nodes, node_labels)
+    ]
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=x_nodes,
+            y=y_nodes,
+            mode="markers+text",
+            text=node_labels,
+            textposition="bottom center",
+            textfont=dict(size=10, color="#1f2933"),
+            marker=dict(size=sizes, color="#cbd5e1", line=dict(color="#ffffff", width=1)),
+            hovertext=hover_nodes,
+            hoverinfo="text",
+        )
+    )
+
+    top_edges = flow.sort_values("events", ascending=False).head(18)
+    max_edge = top_edges["events"].max() if not top_edges.empty else 1
+    min_edge = top_edges["events"].min() if not top_edges.empty else 0
+
+    annotations = []
+    for _, row in top_edges.iterrows():
+        source = row["imposing_clean"]
+        target = row["target_clean"]
+        start_x, start_y = positions[source]
+        end_x, end_y = positions[target]
+        dx = end_x - start_x
+        dy = end_y - start_y
+        dist = math.hypot(dx, dy) or 1
+        offset = 0.06
+        sx = start_x + dx / dist * offset
+        sy = start_y + dy / dist * offset
+        tx = end_x - dx / dist * offset
+        ty = end_y - dy / dist * offset
+        if max_edge > min_edge:
+            arrow_width = 1 + (row["events"] - min_edge) / (max_edge - min_edge) * 2
+        else:
+            arrow_width = 1.5
+        annotations.append(
+            dict(
+                ax=sx,
+                ay=sy,
+                x=tx,
+                y=ty,
+                xref="x",
+                yref="y",
+                axref="x",
+                ayref="y",
+                showarrow=True,
+                arrowhead=3,
+                arrowsize=1,
+                arrowwidth=arrow_width,
+                arrowcolor="rgba(34, 124, 116, 0.55)",
+                opacity=0.9,
+            )
+        )
+
+    year_suffix = "All years" if year_filter is None else f"{year_filter}"
+    fig.update_layout(
+        title=dict(text=f"Tariff Action Flows by Country ({year_suffix})", font=dict(size=17)),
+        height=260,
+        margin=dict(l=0, r=0, t=56, b=0),
+        annotations=annotations,
+        plot_bgcolor="#ffffff",
+        xaxis=dict(visible=False, range=[0, 1]),
+        yaxis=dict(visible=False, range=[0, 1], scaleanchor="x", scaleratio=1),
     )
     return fig
 
@@ -458,28 +636,44 @@ def render_executive_overview_tab() -> None:
 
     st.markdown("<div style='height: 0.6rem;'></div>", unsafe_allow_html=True)
 
-    # ── Row 2: Trend + Top Targets ─────────────────────────────────────
-    chart_left, chart_right = st.columns(2, gap="medium")
+    # ── Filters ───────────────────────────────────────────────────────
+    year_options = ["All years"] + sorted(df["year"].dropna().unique().tolist())
+    year_choice = st.selectbox(
+        "Filter country network by year",
+        options=year_options,
+        index=0,
+        help="Limits the country action network to a single year.",
+    )
+    selected_year = None if year_choice == "All years" else int(year_choice)
 
-    with chart_left:
+    # ── Row 2: Trend + Targets + Sectors ───────────────────────────────
+    col_trend, col_targets, col_sectors = st.columns(3, gap="medium")
+
+    with col_trend:
         st.plotly_chart(
             _chart_trend_over_time(df), use_container_width=True, key="eo_trend"
         )
-    with chart_right:
+    with col_targets:
         st.plotly_chart(
             _chart_top_targets(df), use_container_width=True, key="eo_targets"
         )
-
-    # ── Row 3: Sectors + Action Type Breakdown ─────────────────────────
-    col_sectors, col_donut = st.columns(2, gap="medium")
-
     with col_sectors:
         st.plotly_chart(
             _chart_top_sectors(df), use_container_width=True, key="eo_sectors"
         )
+
+    # ── Row 3: Action Type + Country action network ───────────────────
+    col_donut, col_flow = st.columns(2, gap="medium")
+
     with col_donut:
         st.plotly_chart(
             _chart_action_type_breakdown(df), use_container_width=True, key="eo_types"
+        )
+    with col_flow:
+        st.plotly_chart(
+            _chart_country_action_flow(df, selected_year),
+            use_container_width=True,
+            key="eo_country_flow",
         )
 
     # ── Source note ─────────────────────────────────────────────────────
