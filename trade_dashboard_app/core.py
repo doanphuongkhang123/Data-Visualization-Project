@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 import math
@@ -1065,14 +1065,20 @@ def make_currency_change_heatmap(df: pd.DataFrame) -> go.Figure:
 
 
 def make_sector_performance_chart(df: pd.DataFrame) -> go.Figure:
+    present_sens = [s for s in ["High", "Medium", "Low"] if s in df["tariff_sensitivity"].dropna().unique()]
+    if not present_sens:
+        present_sens = ["High", "Medium", "Low"]
     fig = px.line(
         df,
         x="date",
         y="indexed_to_100",
         color="sector_label",
+        facet_col="tariff_sensitivity",
+        category_orders={"tariff_sensitivity": present_sens},
         title="Indexed performance by sector",
         labels={"date": "", "indexed_to_100": "Index (start = 100)", "sector_label": "Sector"},
     )
+    fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
     fig.update_layout(height=520, legend=dict(orientation="h", y=-0.22, x=0))
     fig.update_yaxes(gridcolor="#e9edf3")
     return fig
@@ -1095,29 +1101,43 @@ def make_sector_latest_heatmap(df: pd.DataFrame) -> go.Figure:
 def make_sector_average_return_bar(df: pd.DataFrame) -> go.Figure:
     work = df.dropna(subset=["daily_return_pct"]).copy()
     avg = (
-        work.groupby("sector_label", as_index=False)
+        work.groupby(["sector_label", "tariff_sensitivity"], as_index=False)
         .agg(avg_return=("daily_return_pct", "mean"))
-        .sort_values("avg_return", ascending=False)
     )
+    sens_order = {"High": 1, "Medium": 2, "Low": 3}
+    avg["sens_rank"] = avg["tariff_sensitivity"].map(sens_order)
+    avg = avg.sort_values(["sens_rank", "avg_return"], ascending=[True, False])
+
     fig = px.bar(
         avg,
         x="avg_return",
         y="sector_label",
+        color="tariff_sensitivity",
+        category_orders={
+            "tariff_sensitivity": ["High", "Medium", "Low"],
+            "sector_label": avg["sector_label"].tolist()
+        },
         orientation="h",
         title="Average daily return by sector",
         labels={"avg_return": "Avg daily return (%)", "sector_label": ""},
     )
     fig.add_vline(x=0, line_width=1, line_dash="dash", line_color="#667085")
-    fig.update_layout(height=520, yaxis=dict(autorange="reversed"), xaxis=dict(gridcolor="#e9edf3"))
+    fig.update_layout(height=520, showlegend=False, yaxis=dict(autorange="reversed"), xaxis=dict(gridcolor="#e9edf3"))
     return fig
 
 
 def make_sector_return_volatility_scatter(df: pd.DataFrame) -> go.Figure:
+    work = df.dropna(subset=["daily_return_pct", "volatility_10d"])
+    present_sens = [s for s in ["High", "Medium", "Low"] if s in work["tariff_sensitivity"].dropna().unique()]
+    if not present_sens:
+        present_sens = ["High", "Medium", "Low"]
     fig = px.scatter(
-        df.dropna(subset=["daily_return_pct", "volatility_10d"]),
+        work,
         x="volatility_10d",
         y="daily_return_pct",
         color="tariff_sensitivity",
+        facet_col="tariff_sensitivity",
+        category_orders={"tariff_sensitivity": present_sens},
         hover_data={"sector_label": True, "country": True, "ticker": True, "date": True},
         title="Return vs volatility",
         labels={
@@ -1126,8 +1146,9 @@ def make_sector_return_volatility_scatter(df: pd.DataFrame) -> go.Figure:
             "tariff_sensitivity": "Tariff sensitivity",
         },
     )
+    fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
     fig.add_hline(y=0, line_width=1, line_dash="dash", line_color="#667085")
-    fig.update_layout(height=460, xaxis=dict(gridcolor="#e9edf3"), yaxis=dict(gridcolor="#e9edf3"))
+    fig.update_layout(height=460, showlegend=False, xaxis=dict(gridcolor="#e9edf3"), yaxis=dict(gridcolor="#e9edf3"))
     return fig
 
 
@@ -1137,6 +1158,7 @@ def make_sector_volatility_boxplot(df: pd.DataFrame) -> go.Figure:
         x="tariff_sensitivity",
         y="volatility_10d",
         color="tariff_sensitivity",
+        points=False,
         title="Volatility by tariff sensitivity",
         labels={"tariff_sensitivity": "Tariff sensitivity", "volatility_10d": "10-day volatility"},
     )
@@ -1145,17 +1167,23 @@ def make_sector_volatility_boxplot(df: pd.DataFrame) -> go.Figure:
 
 
 def make_sector_sensitivity_breakdown(df: pd.DataFrame) -> go.Figure:
-    latest = make_latest_table(df, ["country", "sector_label"])
-    counts = latest.groupby("tariff_sensitivity", as_index=False).size().sort_values("size", ascending=False)
+    counts = df.groupby("tariff_sensitivity")["sector_label"].nunique().reset_index()
+    counts.rename(columns={"sector_label": "count"}, inplace=True)
+    
+    present_sens = [s for s in ["High", "Medium", "Low"] if s in counts["tariff_sensitivity"].values]
+    if not present_sens:
+        present_sens = ["High", "Medium", "Low"]
+        
     fig = px.bar(
         counts,
         x="tariff_sensitivity",
-        y="size",
+        y="count",
         color="tariff_sensitivity",
+        category_orders={"tariff_sensitivity": present_sens},
         title="Sector sensitivity breakdown",
-        labels={"tariff_sensitivity": "Tariff sensitivity", "size": "Sector-country pairs"},
+        labels={"tariff_sensitivity": "Tariff sensitivity", "count": "Sector-country pairs"},
     )
-    fig.update_layout(height=420, xaxis=dict(gridcolor="#e9edf3"), yaxis=dict(gridcolor="#e9edf3"))
+    fig.update_layout(height=260, showlegend=False, yaxis=dict(gridcolor="#e9edf3"))
     return fig
 
 
