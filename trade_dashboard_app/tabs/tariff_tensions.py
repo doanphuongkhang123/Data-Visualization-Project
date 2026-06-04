@@ -81,12 +81,7 @@ def _selected_count(options: list[str], default: list[str], key_prefix: str) -> 
 
 
 def _country_color_map(countries: list[str]) -> dict[str, str]:
-    palette = (
-        px.colors.qualitative.Plotly
-        + px.colors.qualitative.Safe
-        + px.colors.qualitative.Dark24
-        + px.colors.qualitative.Light24
-    )
+    palette = CVD_QUALITATIVE_COLORS
     return {country: palette[idx % len(palette)] for idx, country in enumerate(countries)}
 
 

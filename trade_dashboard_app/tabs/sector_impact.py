@@ -249,36 +249,51 @@ def render_sector_impact_tab() -> None:
         unsafe_allow_html=True,
     )
 
-    top_left, top_mid, top_right = st.columns(3)
+    performance_height = 280
+    secondary_height = 220
+
+    top_left, top_right = st.columns([2, 1])
     with top_left:
-        st.plotly_chart(
-            _compact_figure(make_sector_performance_chart(filtered), height=compact_height),
-            use_container_width=True,
-            config={"displayModeBar": False},
+        performance_fig = _compact_figure(make_sector_performance_chart(filtered), height=performance_height)
+        performance_fig.update_layout(
+            showlegend=True,
+            legend=dict(
+                title="Sector",
+                orientation="h",
+                y=-0.18,
+                x=0,
+                font=dict(size=9),
+            ),
+            margin=dict(l=6, r=6, t=48, b=58),
         )
-    with top_mid:
         st.plotly_chart(
-            _compact_figure(make_sector_average_return_bar(filtered), height=compact_height),
+            performance_fig,
             use_container_width=True,
             config={"displayModeBar": False},
         )
     with top_right:
         st.plotly_chart(
-            _compact_figure(make_sector_volatility_boxplot(filtered), height=compact_height),
+            _compact_figure(make_sector_average_return_bar(filtered), height=performance_height),
             use_container_width=True,
             config={"displayModeBar": False},
         )
 
-    bottom_left, bottom_right = st.columns(2)
+    bottom_left, bottom_mid, bottom_right = st.columns(3)
     with bottom_left:
         st.plotly_chart(
-            _compact_figure(make_sector_sensitivity_breakdown(filtered), height=compact_height),
+            _compact_figure(make_sector_volatility_boxplot(filtered), height=secondary_height),
+            use_container_width=True,
+            config={"displayModeBar": False},
+        )
+    with bottom_mid:
+        st.plotly_chart(
+            _compact_figure(make_sector_sensitivity_breakdown(filtered), height=secondary_height),
             use_container_width=True,
             config={"displayModeBar": False},
         )
     with bottom_right:
         st.plotly_chart(
-            _compact_figure(make_sector_return_volatility_scatter(filtered), height=compact_height),
+            _compact_figure(make_sector_return_volatility_scatter(filtered), height=secondary_height),
             use_container_width=True,
             config={"displayModeBar": False},
         )

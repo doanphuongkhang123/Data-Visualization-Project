@@ -5,8 +5,9 @@ import plotly.graph_objects as go
 import streamlit as st
 from html import escape
 
-# Custom premium color palette matching the WTO theme
-MARKET_COLORS = ["#227c74", "#4C78A8", "#b15c63", "#D9895B", "#7b61a8", "#8a8f36", "#5B8C7A"]
+MARKET_COLORS = CVD_QUALITATIVE_COLORS
+EVENT_COLORS = {"Near Tariff Event (+/-10d)": "#D55E00", "Normal Days": "#0072B2"}
+PERFORMANCE_COLORS = {"Positive Return": "#0072B2", "Negative Return": "#D55E00"}
 
 def reindex_to_100(df: pd.DataFrame) -> pd.DataFrame:
     """Dynamically reindexes stock close prices to 100 on the first date in the filtered dataset."""
@@ -48,14 +49,14 @@ def add_tariff_shading_rects(fig: go.Figure, df: pd.DataFrame) -> go.Figure:
         fig.add_vrect(
             x0=s_dt,
             x1=e_dt,
-            fillcolor="#d9895b",
+            fillcolor="#D55E00",
             opacity=0.09,
             layer="below",
             line_width=0
         )
         
     fig.add_annotation(
-        text="<span style='color:#d9895b'>■</span> Tariff Event",
+        text="<span style='color:#D55E00'>Event window</span>",
         x=1.0, y=1.0,
         xanchor="right", yanchor="bottom",
         xref="paper", yref="paper",
@@ -134,13 +135,13 @@ def _render_market_legends(indices: list[str], color_map: dict[str, str]) -> Non
     </div>
     <div class="market-legend">
         <span class="market-legend-title">Proximity</span>
-        <span class="market-legend-item"><span class="market-legend-swatch" style="background:#b15c63;"></span><span>Near Tariff Event (±10d)</span></span>
-        <span class="market-legend-item"><span class="market-legend-swatch" style="background:#4C78A8;"></span><span>Normal Days</span></span>
+        <span class="market-legend-item"><span class="market-legend-swatch" style="background:#D55E00;"></span><span>Near Tariff Event (+/-10d)</span></span>
+        <span class="market-legend-item"><span class="market-legend-swatch" style="background:#0072B2;"></span><span>Normal Days</span></span>
     </div>
     <div class="market-legend">
         <span class="market-legend-title">Performance</span>
-        <span class="market-legend-item"><span class="market-legend-swatch" style="background:#227c74;"></span><span>Positive Return</span></span>
-        <span class="market-legend-item"><span class="market-legend-swatch" style="background:#b15c63;"></span><span>Negative Return</span></span>
+        <span class="market-legend-item"><span class="market-legend-swatch" style="background:#0072B2;"></span><span>Positive Return</span></span>
+        <span class="market-legend-item"><span class="market-legend-swatch" style="background:#D55E00;"></span><span>Negative Return</span></span>
     </div>
 </div>
 """,
@@ -149,13 +150,13 @@ def _render_market_legends(indices: list[str], color_map: dict[str, str]) -> Non
 
 def make_dynamic_performance_chart(df: pd.DataFrame, highlight_index: str = "None", show_shading: bool = True, height: int = 240) -> go.Figure:
     df = reindex_to_100(df)
-    df["Event Status"] = df["tariff_event_nearby"].map({True: "Near Tariff Event (±10d)", False: "Normal Period"})
+    df["Event Status"] = df["tariff_event_nearby"].map({True: "Near Tariff Event (+/-10d)", False: "Normal Period"})
     
     unique_indices = df["index_name"].unique()
     if highlight_index != "None" and highlight_index in unique_indices:
         group = df[df["index_name"] == highlight_index].sort_values("date")
         latest_val = group["indexed_to_100"].iloc[-1] if not group.empty else 100.0
-        highlight_color = "#227c74" if latest_val >= 100.0 else "#b15c63"
+        highlight_color = PERFORMANCE_COLORS["Positive Return"] if latest_val >= 100.0 else PERFORMANCE_COLORS["Negative Return"]
         color_map = {idx: highlight_color if idx == highlight_index else "#d1d5db" for idx in unique_indices}
     else:
         color_map = {idx: MARKET_COLORS[i % len(MARKET_COLORS)] for i, idx in enumerate(sorted(unique_indices))}
@@ -176,10 +177,11 @@ def make_dynamic_performance_chart(df: pd.DataFrame, highlight_index: str = "Non
                 trace.opacity = 0.35
         else:
             trace.line.width = 2.0
-            trace.opacity = 0.95
+            trace.opacity = 0.85
             
     if show_shading:
         fig = add_tariff_shading_rects(fig, df)
+    fig.add_hline(y=100, line_width=1, line_dash="dash", line_color="#667085")
     fig.update_layout(height=height, yaxis=dict(gridcolor="#e9edf3"), xaxis=dict(gridcolor="#e9edf3"), plot_bgcolor="white")
     return fig
 
@@ -224,13 +226,13 @@ def make_volatility_heatmap_chart(df: pd.DataFrame, highlight_index: str = "None
                         x0=s, x1=e,
                         y0=1.01, y1=1.06,
                         xref="x", yref="paper",
-                        fillcolor="#227c74",
+                        fillcolor="#D55E00",
                         line_width=0,
                         layer="above"
                     )
             
             fig.add_annotation(
-                text="<span style='color:#227c74'>■</span> Tariff Event",
+                text="<span style='color:#D55E00'>Event window</span>",
                 x=1.0, y=1.07,
                 xanchor="right", yanchor="bottom",
                 xref="paper", yref="paper",
@@ -250,14 +252,15 @@ def make_volatility_heatmap_chart(df: pd.DataFrame, highlight_index: str = "None
 
 def make_avg_return_comparison_chart(df: pd.DataFrame, height: int = 240) -> go.Figure:
     agg = df.groupby(["index_name", "tariff_event_nearby"], as_index=False)["daily_return_pct"].mean()
-    agg["proximity_label"] = agg["tariff_event_nearby"].map({True: "Near Tariff Event (±10d)", False: "Normal Days"})
+    agg["proximity_label"] = agg["tariff_event_nearby"].map({True: "Near Tariff Event (+/-10d)", False: "Normal Days"})
     
     fig = px.bar(
         agg, x="index_name", y="daily_return_pct", color="proximity_label", barmode="group",
         labels={"index_name": "", "daily_return_pct": "Avg Return (%)", "proximity_label": "Proximity"},
-        color_discrete_map={"Near Tariff Event (±10d)": "#b15c63", "Normal Days": "#4C78A8"}
+        color_discrete_map=EVENT_COLORS
     )
-    fig.update_layout(height=height, yaxis=dict(gridcolor="#e9edf3", tickformat="+.3f" if agg["daily_return_pct"].abs().max() < 0.1 else "+.2f"), xaxis=dict(tickangle=-30, gridcolor="#e9edf3"), plot_bgcolor="white")
+    fig.add_hline(y=0, line_width=1, line_dash="dash", line_color="#667085")
+    fig.update_layout(height=height, yaxis=dict(gridcolor="#e9edf3", tickformat="+.3f" if agg["daily_return_pct"].abs().max() < 0.1 else "+.2f", rangemode="tozero"), xaxis=dict(tickangle=-30, gridcolor="#e9edf3"), plot_bgcolor="white")
     return fig
 
 def make_top_indices_bar_chart(df: pd.DataFrame, height: int = 240) -> go.Figure:
@@ -281,21 +284,25 @@ def make_top_indices_bar_chart(df: pd.DataFrame, height: int = 240) -> go.Figure
     fig = px.bar(
         ret_df, x="total_return_pct", y="index_name", color="color_group", orientation="h",
         labels={"total_return_pct": "Total Return (%)", "index_name": "", "color_group": "Performance"},
-        color_discrete_map={"Positive Return": "#227c74", "Negative Return": "#b15c63"}
+        color_discrete_map=PERFORMANCE_COLORS,
+        pattern_shape="color_group",
+        pattern_shape_map={"Positive Return": "", "Negative Return": "/"},
     )
-    fig.update_layout(height=height, xaxis=dict(gridcolor="#e9edf3", tickformat="+.1f%"), yaxis=dict(autorange="reversed"), plot_bgcolor="white")
+    fig.add_vline(x=0, line_width=1, line_dash="dash", line_color="#667085")
+    fig.update_layout(height=height, xaxis=dict(gridcolor="#e9edf3", tickformat="+.1f%", rangemode="tozero"), yaxis=dict(autorange="reversed"), plot_bgcolor="white")
     return fig
 
 def make_daily_return_boxplot(df: pd.DataFrame, group_by_col: str, height: int = 240) -> go.Figure:
     df = df.copy()
-    df["proximity_label"] = df["tariff_event_nearby"].map({True: "Near Tariff Event (±10d)", False: "Normal Days"})
+    df["proximity_label"] = df["tariff_event_nearby"].map({True: "Near Tariff Event (+/-10d)", False: "Normal Days"})
     
     fig = px.box(
         df.dropna(subset=["daily_return_pct"]), x=group_by_col, y="daily_return_pct", color="proximity_label",
         labels={"daily_return_pct": "Daily Return (%)", group_by_col: "", "proximity_label": "Proximity"},
-        color_discrete_map={"Near Tariff Event (±10d)": "#b15c63", "Normal Days": "#4C78A8"},
+        color_discrete_map=EVENT_COLORS,
         points=False
     )
+    fig.add_hline(y=0, line_width=1, line_dash="dash", line_color="#667085")
     fig.update_layout(height=height, yaxis=dict(gridcolor="#e9edf3"), xaxis=dict(tickangle=-30, gridcolor="#e9edf3"), plot_bgcolor="white")
     return fig
 
