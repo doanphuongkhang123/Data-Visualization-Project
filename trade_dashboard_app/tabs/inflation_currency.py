@@ -6,6 +6,9 @@ from core import *
 DEFAULT_METRICS = ["CPI", "PPI", "PCE", "Import Price Index"]
 DEFAULT_COUNTRIES = ["Australia", "Canada", "Singapore"]
 PLOTLY_CONFIG = {"displayModeBar": "hover", "displaylogo": False, "scrollZoom": False}
+PAGE5_BLUE = "#0072B2"
+PAGE5_ORANGE = "#D55E00"
+PAGE5_GREEN = "#009E73"
 CURRENCY_COLOR_MAP = {
     "AUD": "#2a9d8f",
     "CAD": "#8e5ea2",
@@ -50,6 +53,25 @@ CURRENCY_TARIFF_ALIASES = {
     "VND": {"VNM", "Vietnam"},
 }
 BROAD_TARGETS = {"ALL", "Global", "GLOBAL"}
+ERA_CONTEXT_COLORS = {
+    "Pre-Trade War": PERIOD_COLORS.get("Pre-Trade War", "#5B8C7A"),
+    "Trade War 1.0": PERIOD_COLORS.get("Trade War 1.0", "#D9895B"),
+    "Recovery": PERIOD_COLORS.get("Recovery", "#4C78A8"),
+    "Trade War 2.0": PERIOD_COLORS.get("Trade War 2.0", "#B15C63"),
+}
+ERA_DATE_SPANS = [
+    ("Pre-Trade War", pd.Timestamp("2015-01-01"), pd.Timestamp("2018-02-28")),
+    ("Trade War 1.0", pd.Timestamp("2018-03-01"), pd.Timestamp("2019-12-31")),
+    ("Recovery", pd.Timestamp("2020-01-01"), pd.Timestamp("2023-12-31")),
+    ("Trade War 2.0", pd.Timestamp("2024-01-01"), None),
+]
+ERA_CONTEXT_LABELS = {
+    "Pre-Trade War": "Pre-Trade War",
+    "Trade War 1.0": "Trade War 1.0",
+    "Recovery": "Recovery",
+    "Trade War 2.0": "Trade War 2.0",
+}
+ERA_TO_PERIOD_LABEL = {"Phase 1 + COVID": "Recovery"}
 
 
 def _option_key(option: str) -> str:
@@ -88,7 +110,7 @@ def _checkbox_dropdown(label: str, options: list[str], default: list[str], key_p
     selected_count = sum(
         1 for option in options if st.session_state.get(f"{key_prefix}_{_option_key(option)}", option in default)
     )
-    with st.popover(f"{label} ({selected_count})"):
+    with st.popover(f"{label} ({selected_count})", use_container_width=True):
         st.checkbox(
             "Select all",
             key=f"{key_prefix}_select_all",
@@ -114,38 +136,107 @@ def format_usd_millions_as_billions(value: float) -> str:
     return f"{sign}${abs(value) / 1_000:,.1f}B"
 
 
-def render_kpi_row(items: list[tuple[str, str]]) -> None:
+def add_era_context_to_date_chart(
+    fig: go.Figure,
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    label_y: float = 1.07,
+    short_label_y: float = 1.08,
+) -> go.Figure:
+    if pd.isna(start_date) or pd.isna(end_date):
+        return fig
+
+    for era, era_start, era_end in ERA_DATE_SPANS:
+        span_start = max(era_start, start_date)
+        span_end = min(era_end or end_date, end_date)
+        if span_start > span_end:
+            continue
+
+        color = ERA_CONTEXT_COLORS.get(era, "#8d99ae")
+        midpoint = span_start + (span_end - span_start) / 2
+        span_days = (span_end - span_start).days
+        fig.add_vrect(
+            x0=span_start,
+            x1=span_end,
+            fillcolor=color,
+            opacity=0.08,
+            layer="below",
+            line_width=0,
+        )
+        label_x = midpoint
+        annotation_y = label_y
+        xanchor = "center"
+        if span_days < 365:
+            label_x = span_end - pd.Timedelta(days=18)
+            annotation_y = short_label_y
+            xanchor = "right"
+        fig.add_annotation(
+            x=label_x,
+            y=annotation_y,
+            xref="x",
+            yref="paper",
+            text=ERA_CONTEXT_LABELS.get(era, era),
+            showarrow=False,
+            xanchor=xanchor,
+            font=dict(size=10, color=color),
+            bgcolor="rgba(255,255,255,0.72)",
+            bordercolor=color,
+            borderwidth=1,
+            borderpad=3,
+        )
+
+    for boundary in [pd.Timestamp("2018-03-01"), pd.Timestamp("2020-01-01"), pd.Timestamp("2024-01-01")]:
+        if start_date < boundary < end_date:
+            fig.add_vline(
+                x=boundary,
+                line_width=1,
+                line_dash="dot",
+                line_color="#98a2b3",
+                opacity=0.75,
+            )
+    return fig
+
+
+def render_kpi_row(items: list[tuple[str, str, str]]) -> None:
     cards = "".join(
         (
-            '<div class="page5-kpi-card">'
-            f'<span class="page5-kpi-label">{escape(str(label))}</span>'
-            f'<strong class="page5-kpi-value">{escape(str(value))}</strong>'
+            f'<div class="page5-kpi" style="border-top-color: {escape(str(accent))}; color: {escape(str(accent))};">'
+            f'<strong style="color: {escape(str(accent))};">{escape(str(value))}</strong>'
+            f"<span>{escape(str(label))}</span>"
             "</div>"
         )
-        for label, value in items
+        for label, value, accent in items
     )
-    st.markdown(f'<div class="page5-kpi-grid">{cards}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="page5-kpis">{cards}</div>', unsafe_allow_html=True)
 
 
 def filter_inflation_currency_data(inflation: pd.DataFrame, currency: pd.DataFrame):
     metric_options = sorted(inflation["metric"].dropna().unique())
-    era_options = [era for era in ERA_ORDER if era in set(inflation["era"].dropna())]
+    era_options = [
+        ERA_TO_PERIOD_LABEL.get(era, era)
+        for era in ERA_ORDER
+        if era in set(inflation["era"].dropna())
+    ]
+    period_to_era = {ERA_TO_PERIOD_LABEL.get(era, era): era for era in ERA_ORDER}
     country_options = sorted(currency["country"].dropna().unique())
     default_countries = [country for country in DEFAULT_COUNTRIES if country in country_options]
 
-    c1, c2, c3, c4, c5 = st.columns([0.9, 0.82, 1.0, 0.78, 1.1])
+    c_year, c1, c2, c3, c4 = st.columns(
+        [1.15, 1.0, 0.8, 1.2, 0.95],
+        vertical_alignment="bottom",
+    )
     with c1:
         selected_metrics = _checkbox_dropdown(
-            "Metrics",
+            "Metric",
             metric_options,
             [m for m in DEFAULT_METRICS if m in metric_options],
             "page5_metrics",
         )
     with c2:
-        selected_eras = _checkbox_dropdown("Eras", era_options, era_options, "page5_eras")
+        selected_periods = _checkbox_dropdown("Period", era_options, era_options, "page5_periods")
     with c3:
         selected_countries = _checkbox_dropdown(
-            "Exchange-rate countries",
+            "Country / economy",
             country_options,
             default_countries or country_options[:6],
             "page5_countries_v2",
@@ -155,15 +246,15 @@ def filter_inflation_currency_data(inflation: pd.DataFrame, currency: pd.DataFra
     currency_options = sorted(currency_base["currency"].dropna().unique())
     with c4:
         selected_currencies = _checkbox_dropdown(
-            "Currencies",
+            "Currency",
             currency_options,
             currency_options,
             "page5_currencies",
         )
 
-    inflation_base = inflation[
-        inflation["era"].isin(selected_eras)
-    ].copy()
+    selected_eras = [period_to_era.get(period, period) for period in selected_periods]
+    inflation_base = inflation[inflation["era"].isin(selected_eras)].copy()
+    inflation_base["period"] = inflation_base["era"].replace(ERA_TO_PERIOD_LABEL)
     currency_base = currency_base[currency_base["currency"].isin(selected_currencies)].copy()
 
     date_bounds = []
@@ -178,20 +269,25 @@ def filter_inflation_currency_data(inflation: pd.DataFrame, currency: pd.DataFra
 
     min_date = min(start for start, _ in date_bounds).date()
     max_date = max(end for _, end in date_bounds).date()
-    with c5:
-        with st.popover(f"Date range ({min_date:%Y/%m/%d} - {max_date:%Y/%m/%d})"):
-            date_range = st.date_input(
-                "Date range",
-                value=(min_date, max_date),
-                min_value=min_date,
-                max_value=max_date,
-                key=f"page5_date_range_{min_date}_{max_date}",
-            )
+    min_year = min_date.year
+    max_year = max_date.year
+    with c_year:
+        selected_year_range = st.slider(
+            "Year range",
+            min_value=min_year,
+            max_value=max_year,
+            value=(min_year, max_year),
+            step=1,
+            key=f"page5_year_range_{min_year}_{max_year}",
+        )
 
-    if isinstance(date_range, tuple) and len(date_range) == 2:
-        start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
+    if isinstance(selected_year_range, tuple) and len(selected_year_range) == 2:
+        start_year, end_year = selected_year_range
     else:
-        start_date, end_date = pd.to_datetime(min_date), pd.to_datetime(max_date)
+        start_year, end_year = min_year, max_year
+
+    start_date = max(pd.Timestamp(year=int(start_year), month=1, day=1), pd.to_datetime(min_date))
+    end_date = min(pd.Timestamp(year=int(end_year), month=12, day=31), pd.to_datetime(max_date))
 
     if start_date > end_date:
         st.warning("Start date must be before end date.")
@@ -229,7 +325,7 @@ def make_price_response_chart(df: pd.DataFrame, compact: bool = False) -> go.Fig
         y="value",
         color="display_metric",
         title="United States price indexes" if compact else "United States consumer, producer, and consumption price indexes",
-        labels={"date": "", "value": "Index value", "display_metric": "Price index"},
+        labels={"date": "Date", "value": "Index value", "display_metric": "Price index"},
     )
     fig.update_yaxes(gridcolor="#e9edf3")
     if compact:
@@ -246,7 +342,7 @@ def make_price_response_chart(df: pd.DataFrame, compact: bool = False) -> go.Fig
             ),
             margin=dict(l=44, r=8, t=44, b=78),
         )
-        fig.update_xaxes(title="", tickfont=dict(size=10))
+        fig.update_xaxes(title="Date", tickfont=dict(size=10))
         fig.update_yaxes(title="Index value", title_font=dict(size=11), tickfont=dict(size=10))
         return fig
     fig.update_layout(
@@ -261,44 +357,59 @@ def make_price_response_chart(df: pd.DataFrame, compact: bool = False) -> go.Fig
 
 def make_average_yoy_by_era_chart(df: pd.DataFrame, compact: bool = False) -> go.Figure:
     work = df.dropna(subset=["yoy_change_pct"]).copy()
-    era_display = {
+    work["period"] = work["era"].replace(ERA_TO_PERIOD_LABEL)
+    period_display = {
         "Pre-Trade War": "Pre-Trade<br>War",
         "Trade War 1.0": "Trade War<br>1.0",
-        "Phase 1 + COVID": "Phase 1 +<br>COVID",
+        "Recovery": "Recovery",
         "Trade War 2.0": "Trade War<br>2.0",
     }
-    work["era_display"] = work["era"].map(era_display).fillna(work["era"])
-    avg = work.groupby(["era", "metric"], as_index=False)["yoy_change_pct"].mean()
-    avg["era_display"] = avg["era"].map(era_display).fillna(avg["era"])
+    work["period_display"] = work["period"].map(period_display).fillna(work["period"])
+    avg = work.groupby(["period", "metric"], as_index=False)["yoy_change_pct"].mean()
+    avg["period_display"] = avg["period"].map(period_display).fillna(avg["period"])
     fig = px.bar(
         avg,
-        x="era_display",
+        x="period_display",
         y="yoy_change_pct",
         color="metric",
         barmode="group",
-        category_orders={"era_display": ["Pre-Trade<br>War", "Trade War<br>1.0", "Phase 1 +<br>COVID", "Trade War<br>2.0"]},
+        category_orders={
+            "period_display": ["Pre-Trade<br>War", "Trade War<br>1.0", "Recovery", "Trade War<br>2.0"],
+            "metric": ["CPI", "Import Price Index", "PCE", "PPI"],
+        },
         color_discrete_sequence=px.colors.qualitative.Set2,
-        title="Average year-over-year change" if compact else "Average year-over-year change by era",
-        labels={"era_display": "Trade-war era", "yoy_change_pct": "Year-over-year change (%)", "metric": "Metric"},
+        title="Average year-over-year change" if compact else "Average year-over-year change by period",
+        labels={"period_display": "Trade-war period", "yoy_change_pct": "Year-over-year change (%)", "metric": "Metric"},
     )
     if compact:
+        for trace in fig.data:
+            if trace.name == "Import Price Index":
+                trace.name = "Import Price<br>Index"
         fig.update_layout(
             height=320,
             title_font_size=13,
             yaxis=dict(gridcolor="#e9edf3"),
             legend=dict(
                 orientation="h",
-                y=-0.24,
+                y=-0.20,
                 x=0,
-                font=dict(size=10),
-                title=dict(text="Metric", font=dict(size=10)),
+                font=dict(size=9),
+                title=dict(text=""),
+                entrywidth=92,
+                entrywidthmode="pixels",
             ),
-            margin=dict(l=52, r=8, t=44, b=82),
+            margin=dict(l=52, r=8, t=44, b=70),
         )
         fig.update_xaxes(title="", tickfont=dict(size=10))
         fig.update_yaxes(title="Year-over-year change (%)", title_font=dict(size=11), tickfont=dict(size=10))
         return fig
-    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=54, r=14, t=50, b=74))
+    fig.update_layout(
+        height=310,
+        title_font_size=14,
+        yaxis=dict(gridcolor="#e9edf3"),
+        legend=dict(orientation="h", y=-0.28, x=0, title=dict(text=""), entrywidth=118, entrywidthmode="pixels"),
+        margin=dict(l=54, r=14, t=50, b=74),
+    )
     return fig
 
 
@@ -316,7 +427,7 @@ def make_china_trade_chart(df: pd.DataFrame) -> go.Figure:
         y="value",
         color="flow_label",
         title="United States-China trade flows",
-        labels={"date": "", "value": "United States dollars<br>(millions)", "flow_label": "Trade flow"},
+        labels={"date": "Date", "value": "United States dollars<br>(millions)", "flow_label": "Trade flow"},
     )
     fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.34, x=0), margin=dict(l=62, r=14, t=50, b=78))
     return fig
@@ -340,7 +451,7 @@ def make_trade_balance_chart(df: pd.DataFrame) -> go.Figure:
     fig.update_layout(
         title="United States total trade balance",
         height=310,
-        xaxis=dict(title=""),
+        xaxis=dict(title="Date"),
         yaxis=dict(title="United States dollars<br>(millions)", gridcolor="#e9edf3"),
         title_font_size=14,
         margin=dict(l=62, r=14, t=50, b=34),
@@ -363,36 +474,18 @@ def make_currency_rate_chart(df: pd.DataFrame, tariff: pd.DataFrame, compact: bo
         color="currency",
         color_discrete_map=CURRENCY_COLOR_MAP,
         title="Currency rate versus United States dollar",
-        labels={"date": "", "rate_vs_usd": "Local currency units<br>per United States dollar", "currency": "Currency"},
+        labels={"date": "Date", "rate_vs_usd": "Local currency units<br>per United States dollar", "currency": "Currency"},
     )
 
     start_date = work["date"].min()
     end_date = work["date"].max()
-    if pd.notna(start_date) and pd.notna(end_date):
-        trade_war_1_start = max(pd.Timestamp("2018-03-01"), start_date)
-        trade_war_1_end = min(pd.Timestamp("2019-12-31"), end_date)
-        if trade_war_1_start <= trade_war_1_end:
-            fig.add_vrect(
-                x0=trade_war_1_start,
-                x1=trade_war_1_end,
-                fillcolor="#d9895b",
-                opacity=0.18,
-                line_width=0,
-                annotation_text="Trade War 1.0",
-                annotation_position="top left",
-            )
-
-        trade_war_2_start = max(pd.Timestamp("2024-01-01"), start_date)
-        if trade_war_2_start <= end_date:
-            fig.add_vrect(
-                x0=trade_war_2_start,
-                x1=end_date,
-                fillcolor="#b15c63",
-                opacity=0.18,
-                line_width=0,
-                annotation_text="Trade War 2.0",
-                annotation_position="top left",
-            )
+    add_era_context_to_date_chart(
+        fig,
+        start_date,
+        end_date,
+        label_y=0.98 if compact else 1.07,
+        short_label_y=0.98 if compact else 1.08,
+    )
 
     tariff_events = tariff[(tariff["date"] >= start_date) & (tariff["date"] <= end_date)].copy()
     target_marker_added = False
@@ -482,9 +575,16 @@ def make_currency_rate_chart(df: pd.DataFrame, tariff: pd.DataFrame, compact: bo
                 font=dict(size=10),
                 title=dict(text="Currency", font=dict(size=10)),
             ),
-            margin=dict(l=62, r=8, t=52, b=82),
+            margin=dict(l=62, r=8, t=44, b=82),
         )
-        fig.update_xaxes(title="", tickfont=dict(size=10))
+        fig.update_xaxes(
+            title="Date",
+            tickfont=dict(size=10),
+            range=[
+                start_date - pd.Timedelta(days=140),
+                end_date + pd.Timedelta(days=100),
+            ],
+        )
         fig.update_yaxes(
             title="Local currency units<br>per United States dollar",
             title_font=dict(size=11),
@@ -503,7 +603,7 @@ def make_rolling_volatility_chart(df: pd.DataFrame) -> go.Figure:
         color="currency",
         color_discrete_map=CURRENCY_COLOR_MAP,
         title="Rolling 7-day currency volatility",
-        labels={"date": "", "rolling_7d_vol": "Volatility", "currency": "Currency"},
+        labels={"date": "Date", "rolling_7d_vol": "Volatility", "currency": "Currency"},
     )
     fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=50, r=14, t=50, b=74))
     return fig
@@ -534,64 +634,76 @@ def render_inflation_currency_tab() -> None:
     st.markdown(
         """
         <style>
-        .page5-title {
-            border-bottom: 0 !important;
-            margin-bottom: 1rem !important;
-            padding-bottom: 0 !important;
-            align-items: flex-start !important;
+        .page5-page-title {
+            margin-top: -0.7rem;
+            margin-bottom: 0.35rem;
+            padding-bottom: 0.28rem;
         }
-        .page5-title p {
+        .page5-compact-title h1 {
+            font-size: 1.35rem;
+            line-height: 1.2;
+            margin: 0;
+        }
+        .page5-compact-title p {
+            margin: 0;
+            color: #667085;
+            font-size: 0.82rem;
+            line-height: 1.15;
+        }
+        .page5-kpis {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.7rem;
+            margin: 0.35rem 0 0.85rem;
+        }
+        .page5-kpi {
+            border: 1px solid #d9dee7;
+            border-top: 3px solid #20242a;
+            background: #f7f9fb;
+            border-radius: 6px;
+            padding: 0.8rem 0.65rem 0.7rem;
+            min-width: 0;
+            min-height: 92px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: center;
+        }
+        .page5-kpi strong {
+            display: block;
+            font-size: 1.25rem;
+            font-weight: 700;
+            line-height: 1.15;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 100%;
-            line-height: 1.2;
+            order: 1;
         }
-        .page5-title + div {
-            margin-top: 0.3rem !important;
-        }
-        .page5-title + div [data-testid="stHorizontalBlock"] {
-            gap: 0.85rem !important;
-        }
-        .page5-title + div + div [data-testid="stMetric"] {
-            padding-top: 0.45rem !important;
-            padding-bottom: 0.45rem !important;
-        }
-        .page5-title + div + div {
-            margin-top: 0.55rem !important;
-        }
-        .page5-kpi-grid {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 0.75rem;
-            margin: 0.2rem 0 0.8rem;
-        }
-        .page5-kpi-card {
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-            gap: 0.75rem;
-            min-width: 0;
-            padding: 0.7rem 0.85rem;
-            border: 1px solid #d9dee7;
-            border-radius: 6px;
-            background: #f7f9fb;
-        }
-        .page5-kpi-label {
-            min-width: 0;
+        .page5-kpi span {
+            display: block;
+            color: #667085;
+            font-size: 0.68rem;
+            line-height: 1.1;
+            margin-top: 0.35rem;
+            text-transform: uppercase;
+            letter-spacing: 0.45px;
             white-space: nowrap;
-            color: #2f3440;
-            font-size: 0.92rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            order: 2;
         }
-        .page5-kpi-value {
-            flex: 0 0 auto;
-            white-space: nowrap;
-            color: #20242a;
-            font-size: 1.05rem;
+        .page5-kpi::after {
+            content: "";
+            width: 28px;
+            height: 3px;
+            border-radius: 2px;
+            background: currentColor;
+            margin: 0.45rem auto 0;
+            order: 3;
         }
         </style>
-        <div class="page-title page5-title">
-            <div>
+        <div class="page-title page5-page-title">
+            <div class="page5-compact-title">
                 <h1>Inflation & Currency Response</h1>
                 <p>Connecting tariff tension to United States price pressure, United States-China trade flows, the United States total trade balance, and exchange-rate stress.</p>
             </div>
@@ -634,16 +746,19 @@ def render_inflation_currency_tab() -> None:
             (
                 "Latest United States CPI YoY",
                 format_pct(latest_cpi.iloc[0]["yoy_change_pct"]) if not latest_cpi.empty else "n/a",
+                "#20242a",
             ),
             (
                 "Latest United States import price YoY",
                 format_pct(latest_import_price.iloc[0]["yoy_change_pct"]) if not latest_import_price.empty else "n/a",
+                PAGE5_BLUE,
             ),
             (
                 "Latest United States total trade balance",
                 format_usd_millions_as_billions(latest_trade_balance.iloc[0]["value"]) if not latest_trade_balance.empty else "n/a",
+                PAGE5_ORANGE,
             ),
-            ("Currency rows near tariff events", f"{event_rows:,}"),
+            ("Currency rows near tariff events", f"{event_rows:,}", PAGE5_GREEN),
         ]
     )
 
