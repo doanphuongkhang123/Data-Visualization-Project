@@ -31,19 +31,8 @@ def format_usd_millions_as_billions(value: float) -> str:
 
 
 def filter_inflation_currency_data(inflation: pd.DataFrame, currency: pd.DataFrame):
-    min_date = min(inflation["date"].min(), currency["date"].min()).date()
-    max_date = max(inflation["date"].max(), currency["date"].max()).date()
-
-    c1, c2, c3 = st.columns([1.2, 1.25, 1.25])
+    c1, c2, c3 = st.columns([1.25, 1.25, 1.25])
     with c1:
-        date_range = st.date_input(
-            "Date range",
-            value=(min_date, max_date),
-            min_value=min_date,
-            max_value=max_date,
-            key="page5_date_range",
-        )
-    with c2:
         metric_options = sorted(inflation["metric"].dropna().unique())
         selected_metrics = st.multiselect(
             "Metric",
@@ -51,14 +40,12 @@ def filter_inflation_currency_data(inflation: pd.DataFrame, currency: pd.DataFra
             default=[m for m in DEFAULT_METRICS if m in metric_options],
             key="page5_metrics",
         )
-    with c3:
+    with c2:
         era_options = [era for era in ERA_ORDER if era in set(inflation["era"].dropna())]
         selected_eras = st.multiselect("Era", era_options, default=era_options, key="page5_eras")
-
-    c4, c5 = st.columns([1.25, 1.25])
-    country_options = sorted(set(currency["country"].dropna()) | set(inflation["country"].dropna()))
-    default_countries = [country for country in DEFAULT_COUNTRIES if country in country_options]
-    with c4:
+    with c3:
+        country_options = sorted(set(currency["country"].dropna()) | set(inflation["country"].dropna()))
+        default_countries = [country for country in DEFAULT_COUNTRIES if country in country_options]
         selected_countries = st.multiselect(
             "Country / economy",
             country_options,
@@ -66,9 +53,10 @@ def filter_inflation_currency_data(inflation: pd.DataFrame, currency: pd.DataFra
             key="page5_countries",
         )
 
-    currency_base = currency[currency["country"].isin(selected_countries)]
+    currency_base = currency[currency["country"].isin(selected_countries)].copy()
     currency_options = sorted(currency_base["currency"].dropna().unique())
-    with c5:
+    c4, c5 = st.columns([1.25, 1.25])
+    with c4:
         selected_currencies = st.multiselect(
             "Currency",
             currency_options,
@@ -76,23 +64,51 @@ def filter_inflation_currency_data(inflation: pd.DataFrame, currency: pd.DataFra
             key="page5_currencies",
         )
 
+    inflation_base = inflation[
+        (inflation["country"].isin(selected_countries))
+        & (inflation["era"].isin(selected_eras))
+    ].copy()
+    currency_base = currency_base[currency_base["currency"].isin(selected_currencies)].copy()
+
+    date_bounds = []
+    if not inflation_base.empty:
+        date_bounds.append((inflation_base["date"].min(), inflation_base["date"].max()))
+    if not currency_base.empty:
+        date_bounds.append((currency_base["date"].min(), currency_base["date"].max()))
+
+    if not date_bounds:
+        st.warning("No rows are available for the selected country/economy, era, and currency filters.")
+        return inflation.iloc[0:0].copy(), inflation.iloc[0:0].copy(), currency.iloc[0:0].copy(), selected_metrics
+
+    min_date = min(start for start, _ in date_bounds).date()
+    max_date = max(end for _, end in date_bounds).date()
+    with c5:
+        date_range = st.date_input(
+            "Available date range",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date,
+            key=f"page5_date_range_{min_date}_{max_date}",
+        )
+        st.caption(f"Available from {min_date} to {max_date}.")
+
     if isinstance(date_range, tuple) and len(date_range) == 2:
         start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
     else:
         start_date, end_date = pd.to_datetime(min_date), pd.to_datetime(max_date)
 
-    inflation_filtered = inflation[
-        (inflation["date"] >= start_date)
-        & (inflation["date"] <= end_date)
-        & (inflation["country"].isin(selected_countries))
-        & (inflation["era"].isin(selected_eras))
+    if start_date > end_date:
+        st.warning("Start date must be before end date.")
+        return inflation.iloc[0:0].copy(), inflation.iloc[0:0].copy(), currency.iloc[0:0].copy(), selected_metrics
+
+    inflation_filtered = inflation_base[
+        (inflation_base["date"] >= start_date)
+        & (inflation_base["date"] <= end_date)
     ].copy()
 
-    currency_filtered = currency[
-        (currency["date"] >= start_date)
-        & (currency["date"] <= end_date)
-        & (currency["country"].isin(selected_countries))
-        & (currency["currency"].isin(selected_currencies))
+    currency_filtered = currency_base[
+        (currency_base["date"] >= start_date)
+        & (currency_base["date"] <= end_date)
     ].copy()
 
     metric_filtered = inflation_filtered[inflation_filtered["metric"].isin(selected_metrics)].copy()
