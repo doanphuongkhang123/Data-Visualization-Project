@@ -343,7 +343,7 @@ def _chart_trend_over_time(df: pd.DataFrame) -> go.Figure:
         height=340,
         margin=dict(l=0, r=10, t=56, b=0),
         legend=dict(orientation="h", y=-0.18, x=0.5, xanchor="center"),
-        xaxis=dict(title="", dtick=1, gridcolor=GRID_COLOR),
+        xaxis=dict(title="Year", dtick=1, gridcolor=GRID_COLOR),
         yaxis=dict(
             title=dict(text="Number of Events", font=dict(color=ACCENT_BLUE)),
             tickfont=dict(color=ACCENT_BLUE),
@@ -383,7 +383,7 @@ def _chart_top_targets(df: pd.DataFrame) -> go.Figure:
         orientation="h",
         color="events",
         color_continuous_scale=BAR_COLOR_SCALE,
-        labels={"events": "Number of Tariff Actions", "label": ""},
+        labels={"events": "Number of tariff actions", "label": "Target country"},
     )
     fig.update_traces(
         hovertemplate="<b>%{y}</b><br>Events: %{x}<extra></extra>",
@@ -397,7 +397,7 @@ def _chart_top_targets(df: pd.DataFrame) -> go.Figure:
         margin=dict(l=0, r=40, t=56, b=0),
         coloraxis_showscale=False,
         yaxis=dict(autorange="reversed", tickfont=dict(size=12)),
-        xaxis=dict(gridcolor=GRID_COLOR, title="", rangemode="tozero"),
+        xaxis=dict(gridcolor=GRID_COLOR, title="Number of tariff actions", rangemode="tozero"),
         plot_bgcolor="#ffffff",
     )
     # Reverse so largest on top
@@ -427,7 +427,7 @@ def _chart_top_sectors(df: pd.DataFrame) -> go.Figure:
             [0.65, "#e69f00"],
             [1, ACCENT_CORAL],
         ],
-        labels={"events": "Number of Tariff Actions", "sector_clean": ""},
+        labels={"events": "Number of tariff actions", "sector_clean": "Sector"},
     )
     fig.update_traces(
         hovertemplate="<b>%{y}</b><br>Events: %{x}<extra></extra>",
@@ -441,7 +441,7 @@ def _chart_top_sectors(df: pd.DataFrame) -> go.Figure:
         margin=dict(l=0, r=40, t=56, b=0),
         coloraxis_showscale=False,
         yaxis=dict(tickfont=dict(size=11)),
-        xaxis=dict(gridcolor=GRID_COLOR, title="", rangemode="tozero"),
+        xaxis=dict(gridcolor=GRID_COLOR, title="Number of tariff actions", rangemode="tozero"),
         plot_bgcolor="#ffffff",
     )
     fig.update_yaxes(autorange=True)

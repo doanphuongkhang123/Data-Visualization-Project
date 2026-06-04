@@ -277,8 +277,8 @@ def render_tariff_tensions_tab() -> None:
         for c in ["USA", "China", "Vietnam", "Germany", "Mexico"]
         if c in country_options
     ]
-    c1, c2, c3, c4, c5, c6 = st.columns(
-        [1.25, 1.15, 0.95, 0.72, 1.0, 0.9],
+    c1, c2, c3, c4, c5 = st.columns(
+        [1.45, 1.15, 0.85, 1.15, 1.0],
         vertical_alignment="bottom",
     )
     with c1:
@@ -288,14 +288,8 @@ def render_tariff_tensions_tab() -> None:
             default_countries or country_options[:6],
             "impact_country",
         )
+    selected_periods = period_options
     with c2:
-        selected_periods = _checkbox_dropdown(
-            "Periods",
-            period_options,
-            period_options,
-            "impact_period",
-        )
-    with c3:
         selected_year_range = st.slider(
             "Year range",
             min_value=min(years),
@@ -304,7 +298,7 @@ def render_tariff_tensions_tab() -> None:
             step=1,
             key="impact_year_range",
         )
-    with c4:
+    with c3:
         selected_trade_flow = st.selectbox(
             "Trade flow",
             ["Exports", "Imports"],
@@ -319,7 +313,7 @@ def render_tariff_tensions_tab() -> None:
         FDI_INFLOW,
     ]
     yoy_indicator_options = [i for i in yoy_indicator_options if i in macro["indicator_name"].unique()]
-    with c5:
+    with c4:
         yoy_indicator = st.selectbox(
             "YoY indicator",
             yoy_indicator_options,
@@ -327,7 +321,7 @@ def render_tariff_tensions_tab() -> None:
             key="impact_yoy_indicator",
         )
     robust_yoy_display = True
-    with c6:
+    with c5:
         fdi_display_mode = st.selectbox(
             "FDI display",
             ["Absolute USD", "Indexed to 100"],
@@ -335,8 +329,8 @@ def render_tariff_tensions_tab() -> None:
             key="impact_fdi_display_mode",
         )
 
-    if not selected_countries or not selected_periods:
-        st.warning("Select at least one country and one period.")
+    if not selected_countries:
+        st.warning("Select at least one country.")
         return
 
     filtered = filter_annual_macro(macro, selected_countries, selected_periods, selected_year_range)

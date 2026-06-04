@@ -462,7 +462,7 @@ def make_regional_bar(year_df: pd.DataFrame, trade_flow: str) -> go.Figure:
         color="country",
         custom_data=["country", "dataset_share_pct"],
         title=f"Regional composition of {trade_flow.lower()}",
-        labels={"region": "", "metric_value": "US dollars", "country": "Country"},
+        labels={"region": "Region", "metric_value": "US dollars", "country": "Country"},
     )
     fig.update_traces(
         hovertemplate="<b>%{customdata[0]}</b><br>Value: $%{y:,.0f}<br>Share: %{customdata[1]:.2f}%<extra></extra>"
@@ -504,7 +504,7 @@ def make_country_trend(wide: pd.DataFrame, selected_country: str) -> go.Figure:
         height=360,
         margin=dict(l=0, r=0, t=48, b=0),
         yaxis=dict(title="US dollars", tickformat="~s", gridcolor="#e9edf3"),
-        xaxis=dict(title="", dtick=1),
+        xaxis=dict(title="Year", dtick=1),
         legend=dict(orientation="h", y=-0.25, x=0),
     )
     return fig
@@ -544,7 +544,7 @@ def make_aggregate_trend(wide: pd.DataFrame) -> go.Figure:
         height=360,
         margin=dict(l=0, r=0, t=48, b=0),
         yaxis=dict(title="US dollars", tickformat="~s", gridcolor="#e9edf3"),
-        xaxis=dict(title="", dtick=1),
+        xaxis=dict(title="Year", dtick=1),
         legend=dict(orientation="h", y=-0.25, x=0),
     )
     return fig
@@ -570,7 +570,7 @@ def make_index_chart(wide: pd.DataFrame, trade_flow: str, metric_col: str, base_
         color_discrete_map=PERIOD_COLORS,
         category_orders={"period": PERIOD_ORDER},
         title=f"Dataset aggregate index, {trade_flow} ({base_year} = 100)",
-        labels={"year": "", "index": "Index", "period": "Period"},
+        labels={"year": "Year", "index": "Index", "period": "Period"},
     )
     fig.update_traces(hovertemplate="%{x}<br>Index: %{y:.1f}<extra></extra>")
     fig.update_layout(
@@ -656,7 +656,7 @@ def make_tariff_actions_by_year(df: pd.DataFrame) -> go.Figure:
         color="type",
         color_discrete_map=TARIFF_TYPE_COLORS,
         title="Actions by year and type",
-        labels={"year": "", "size": "Events", "type": "Action type"},
+        labels={"year": "Year", "size": "Events", "type": "Action type"},
     )
     fig.update_layout(height=360, legend=dict(orientation="h", y=-0.28, x=0), yaxis=dict(gridcolor="#e9edf3"))
     return fig
@@ -670,7 +670,7 @@ def make_tariff_rate_distribution(df: pd.DataFrame) -> go.Figure:
         nbins=24,
         marginal="rug",
         title="Distribution of tariff-rate changes",
-        labels={"tariff_rate_delta": "Rate change (%)", "retaliation_label": ""},
+        labels={"tariff_rate_delta": "Rate change (%)", "retaliation_label": "Retaliation status"},
         color_discrete_map={"Retaliation": "#d9895b", "Initial or policy action": "#4c78a8"},
     )
     fig.update_layout(height=360, yaxis=dict(gridcolor="#e9edf3"))
@@ -693,7 +693,7 @@ def make_tariff_sector_bar(df: pd.DataFrame, weight_mode: str) -> go.Figure:
         y="sector",
         orientation="h",
         title=f"Top sectors by {weight_mode.lower()}",
-        labels={weight_col: "USD billions" if weight_mode == "Estimated trade value" else "Events", "sector": ""},
+        labels={weight_col: "USD billions" if weight_mode == "Estimated trade value" else "Events", "sector": "Sector"},
         color=weight_col,
         color_continuous_scale="Teal",
     )
@@ -859,7 +859,7 @@ def make_tariff_source_chart(df: pd.DataFrame) -> go.Figure:
         y="source",
         orientation="h",
         title="Top sources in the tariff timeline",
-        labels={"size": "Events", "source": ""},
+        labels={"size": "Events", "source": "Source"},
         color="size",
         color_continuous_scale="Blues",
     )
@@ -913,7 +913,7 @@ def make_market_performance_chart(df: pd.DataFrame) -> go.Figure:
         y="indexed_to_100",
         color="index_name",
         title="Market performance indexed to 100",
-        labels={"date": "", "indexed_to_100": "Index", "index_name": "Market index"},
+        labels={"date": "Date", "indexed_to_100": "Index", "index_name": "Market index"},
     )
     fig.update_layout(height=460, legend=dict(orientation="h", y=-0.28, x=0), yaxis=dict(gridcolor="#e9edf3"))
     return fig
@@ -941,7 +941,7 @@ def make_market_latest_bar(df: pd.DataFrame) -> go.Figure:
         color="country",
         orientation="h",
         title="Latest market performance",
-        labels={"indexed_to_100": "Index", "index_name": ""},
+        labels={"indexed_to_100": "Index", "index_name": "Market index"},
     )
     fig.update_layout(height=500, yaxis=dict(autorange="reversed"), xaxis=dict(gridcolor="#e9edf3"))
     return fig
@@ -956,7 +956,7 @@ def make_market_volatility_chart(df: pd.DataFrame) -> go.Figure:
         color="country",
         orientation="h",
         title="Latest 20-day volatility",
-        labels={"volatility_20d": "20-day volatility", "index_name": ""},
+        labels={"volatility_20d": "20-day volatility", "index_name": "Market index"},
     )
     fig.update_layout(height=500, yaxis=dict(autorange="reversed"), xaxis=dict(gridcolor="#e9edf3"))
     return fig
@@ -1000,7 +1000,7 @@ def make_currency_rate_chart(df: pd.DataFrame, indexed: bool = True) -> go.Figur
         y=y_col,
         color="currency",
         title=title,
-        labels={"date": "", y_col: y_label, "currency": "Currency"},
+        labels={"date": "Date", y_col: y_label, "currency": "Currency"},
     )
     fig.update_layout(height=460, legend=dict(orientation="h", y=-0.26, x=0), yaxis=dict(gridcolor="#e9edf3"))
     return fig
@@ -1021,7 +1021,7 @@ def make_currency_volatility_chart(df: pd.DataFrame) -> go.Figure:
         y="rolling_7d_vol_pct",
         color="currency",
         title="7-day volatility of daily percentage changes",
-        labels={"date": "", "rolling_7d_vol_pct": "7-day volatility (%)", "currency": "Currency"},
+        labels={"date": "Date", "rolling_7d_vol_pct": "7-day volatility (%)", "currency": "Currency"},
     )
     fig.update_layout(height=420, legend=dict(orientation="h", y=-0.28, x=0), yaxis=dict(gridcolor="#e9edf3"))
     return fig
@@ -1090,7 +1090,7 @@ def make_sector_performance_chart(df: pd.DataFrame) -> go.Figure:
         facet_col="tariff_sensitivity",
         category_orders={"tariff_sensitivity": present_sens},
         title="Indexed performance by sector (start = 100)",
-        labels={"date": "", "indexed_to_100": "Index (start = 100)", "sector_label": "Sector"},
+        labels={"date": "Date", "indexed_to_100": "Index (start = 100)", "sector_label": "Sector"},
     )
     fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
     fig.update_traces(opacity=0.82, line=dict(width=1.9))
@@ -1136,7 +1136,7 @@ def make_sector_average_return_bar(df: pd.DataFrame) -> go.Figure:
         },
         orientation="h",
         title="Average daily return by sector (%)",
-        labels={"avg_return": "Avg daily return (%)", "sector_label": "", "tariff_sensitivity": "Tariff sensitivity"},
+        labels={"avg_return": "Avg daily return (%)", "sector_label": "Sector", "tariff_sensitivity": "Tariff sensitivity"},
     )
     fig.add_vline(x=0, line_width=1, line_dash="dash", line_color="#667085")
     fig.update_layout(height=520, showlegend=False, yaxis=dict(autorange="reversed"), xaxis=dict(gridcolor="#e9edf3", rangemode="tozero"))
@@ -1226,7 +1226,7 @@ def make_sector_volatility_bar(df: pd.DataFrame) -> go.Figure:
         color="country",
         orientation="h",
         title="Latest sector volatility",
-        labels={"volatility_10d": "10-day volatility", "sector_label": ""},
+        labels={"volatility_10d": "10-day volatility", "sector_label": "Sector"},
     )
     fig.update_layout(height=520, yaxis=dict(autorange="reversed"), xaxis=dict(gridcolor="#e9edf3"))
     return fig
@@ -1250,7 +1250,7 @@ def make_vietnam_trade_chart(macro: pd.DataFrame) -> go.Figure:
         color="indicator_name",
         facet_row="indicator_name",
         title="Vietnam annual trade and macro indicators",
-        labels={"year": "", "value": "Value", "indicator_name": ""},
+        labels={"year": "Year", "value": "Value", "indicator_name": "Indicator"},
     )
     fig.update_yaxes(matches=None, tickformat="~s")
     fig.update_layout(height=720, showlegend=False)
@@ -1287,7 +1287,7 @@ def make_vietnam_market_currency_chart(stock: pd.DataFrame, currency: pd.DataFra
         title="Vietnam financial pressure: VN-Index and VND per USD",
         height=430,
         yaxis=dict(title="Index, start = 100", gridcolor="#e9edf3"),
-        xaxis=dict(title=""),
+        xaxis=dict(title="Date"),
         legend=dict(orientation="h", y=-0.22, x=0),
     )
     return fig
@@ -1302,7 +1302,7 @@ def make_macro_indicator_chart(df: pd.DataFrame, countries: list[str], indicator
         color="country",
         facet_row="indicator_name",
         title="Long-term macro indicators",
-        labels={"year": "", "value": "Value", "country": "Country", "indicator_name": ""},
+        labels={"year": "Year", "value": "Value", "country": "Country", "indicator_name": "Indicator"},
     )
     fig.update_yaxes(matches=None, tickformat="~s")
     fig.update_layout(height=max(420, 170 * len(indicators)), legend=dict(orientation="h", y=-0.12, x=0))
@@ -1467,7 +1467,7 @@ def make_trade_import_export_chart(
         color_discrete_map=country_color_map,
         custom_data=["country", "period", "indicator_name", "formatted_value"],
         title=f"{title} (current USD)<br><sup>Values shown in current USD.</sup>",
-        labels={"year": "", "value": "US dollars", "country": "Country"},
+        labels={"year": "Year", "value": "US dollars", "country": "Country"},
     )
     fig.update_traces(
         hovertemplate=(
@@ -1520,7 +1520,7 @@ def make_yoy_change_by_period_chart(
         category_orders={"period": PERIOD_ORDER},
         custom_data=["country", "year", "period", "indicator_name", "displayed_yoy", "original_yoy"],
         title=f"YoY change distribution by trade-war period{subtitle}",
-        labels={"period": "", y_col: y_label, "indicator_name": "Indicator"},
+        labels={"period": "Trade-war period", y_col: y_label, "indicator_name": "Indicator"},
     )
     fig.update_traces(
         hovertemplate=(
@@ -1554,7 +1554,7 @@ def make_trade_gdp_chart(
         color_discrete_map=country_color_map,
         custom_data=["country", "period", "indicator_name", "formatted_value"],
         title="Trade share of GDP (%)",
-        labels={"year": "", "value": "Trade (% of GDP)", "country": "Country"},
+        labels={"year": "Year", "value": "Trade (% of GDP)", "country": "Country"},
     )
     fig.update_traces(
         hovertemplate=(
@@ -1591,7 +1591,7 @@ def make_gdp_growth_period_chart(df: pd.DataFrame, height: int = 440) -> go.Figu
         color_continuous_scale="RdBu_r",
         color_continuous_midpoint=0,
         title="Average GDP growth by period (%)",
-        labels=dict(x="", y="", color="GDP growth (%)"),
+        labels=dict(x="Trade-war period", y="Country", color="GDP growth (%)"),
     )
     fig.update_traces(
         hovertemplate="<b>%{y}</b><br>Period: %{x}<br>Average GDP growth: %{z:.2f}%<extra></extra>"
@@ -1641,7 +1641,7 @@ def make_fdi_inflows_chart(
         color_discrete_map=country_color_map,
         custom_data=["country", "period", "indicator_name", "displayed_value", "formatted_value"],
         title=f"FDI net inflows by year ({title_suffix})",
-        labels={"year": "", y_col: y_label, "country": "Country"},
+        labels={"year": "Year", y_col: y_label, "country": "Country"},
     )
     fig.update_traces(
         hovertemplate=(
@@ -1694,7 +1694,7 @@ def make_macro_performance_heatmap(df: pd.DataFrame) -> go.Figure:
         color_continuous_scale="RdBu",
         color_continuous_midpoint=0,
         title="Macro performance by country and trade-war period",
-        labels=dict(x="", y="", color=color_title),
+        labels=dict(x="Trade-war period", y="Country", color=color_title),
     )
     fig.update_traces(
         hovertemplate="<b>%{y}</b><br>Period: %{x}<br>Displayed value: %{z:.1f}%<br>Original value: %{z:.2f}%<extra></extra>"
@@ -1729,7 +1729,7 @@ def make_macro_period_box(df: pd.DataFrame, indicator: str) -> go.Figure:
         category_orders={"period": PERIOD_ORDER},
         color_discrete_map=PERIOD_COLORS,
         title=f"YoY distribution by period: {indicator}",
-        labels={"period": "", "yoy_change_pct": "YoY change (%)"},
+        labels={"period": "Trade-war period", "yoy_change_pct": "YoY change (%)"},
     )
     fig.update_layout(height=420, yaxis=dict(gridcolor="#e9edf3"), showlegend=False)
     return fig
@@ -1774,7 +1774,7 @@ def make_usa_adjustment_chart(inflation: pd.DataFrame, metrics: list[str]) -> go
         color="metric",
         facet_row="metric",
         title="US long-term adjustment indicators",
-        labels={"date": "", "value": "Value", "metric": ""},
+        labels={"date": "Date", "value": "Value", "metric": "Metric"},
     )
     fig.update_yaxes(matches=None)
     fig.update_layout(height=max(420, 160 * len(metrics)), showlegend=False)

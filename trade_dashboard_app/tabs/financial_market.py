@@ -73,8 +73,8 @@ def _compact_figure(fig: go.Figure, title_text: str = "") -> go.Figure:
         title=dict(text=title_text, font=dict(size=13), x=0.02, y=0.96),
         hovermode="closest",
     )
-    fig.update_xaxes(title_font=dict(size=10), tickfont=dict(size=10), title="")
-    fig.update_yaxes(title_font=dict(size=10), tickfont=dict(size=10), title="")
+    fig.update_xaxes(title_font=dict(size=10), tickfont=dict(size=10))
+    fig.update_yaxes(title_font=dict(size=10), tickfont=dict(size=10))
     return fig
 
 def _set_all_checkboxes(option_count: int, key_prefix: str) -> None:
@@ -243,27 +243,37 @@ def make_volatility_heatmap_chart(df: pd.DataFrame, highlight_index: str = "None
         
     fig.update_layout(
         height=height, 
-        yaxis=dict(title="", tickfont=dict(size=10)), 
-        xaxis=dict(title="", tickfont=dict(size=10), showgrid=False), 
+        yaxis=dict(title="Market index", tickfont=dict(size=10)), 
+        xaxis=dict(title="Date", tickfont=dict(size=10), showgrid=False), 
         plot_bgcolor="white",
         margin=dict(l=0, r=0, t=32, b=0)
     )
     return fig
 
-def make_avg_return_comparison_chart(df: pd.DataFrame, height: int = 240) -> go.Figure:
+def make_avg_return_comparison_chart(df: pd.DataFrame, highlight_index: str = "None", height: int = 240) -> go.Figure:
     agg = df.groupby(["index_name", "tariff_event_nearby"], as_index=False)["daily_return_pct"].mean()
     agg["proximity_label"] = agg["tariff_event_nearby"].map({True: "Near Tariff Event (+/-10d)", False: "Normal Days"})
+    active_highlight = highlight_index if highlight_index != "None" and highlight_index in set(agg["index_name"]) else "None"
     
     fig = px.bar(
         agg, x="index_name", y="daily_return_pct", color="proximity_label", barmode="group",
-        labels={"index_name": "", "daily_return_pct": "Avg Return (%)", "proximity_label": "Proximity"},
+        labels={"index_name": "Market index", "daily_return_pct": "Avg return (%)", "proximity_label": "Proximity"},
         color_discrete_map=EVENT_COLORS
     )
+    fig.update_traces(
+        marker_line=dict(width=0.6, color="#ffffff"),
+        opacity=1.0,
+    )
+    for trace in fig.data:
+        trace.marker.opacity = [
+            1.0 if custom_index == active_highlight or active_highlight == "None" else 0.28
+            for custom_index in agg.loc[agg["proximity_label"] == trace.name, "index_name"]
+        ]
     fig.add_hline(y=0, line_width=1, line_dash="dash", line_color="#667085")
     fig.update_layout(height=height, yaxis=dict(gridcolor="#e9edf3", tickformat="+.3f" if agg["daily_return_pct"].abs().max() < 0.1 else "+.2f", rangemode="tozero"), xaxis=dict(tickangle=-30, gridcolor="#e9edf3"), plot_bgcolor="white")
     return fig
 
-def make_top_indices_bar_chart(df: pd.DataFrame, height: int = 240) -> go.Figure:
+def make_top_indices_bar_chart(df: pd.DataFrame, highlight_index: str = "None", height: int = 240) -> go.Figure:
     returns = []
     for idx, group in df.groupby("index_name"):
         group = group.sort_values("date")
@@ -283,9 +293,16 @@ def make_top_indices_bar_chart(df: pd.DataFrame, height: int = 240) -> go.Figure
     
     fig = px.bar(
         ret_df, x="total_return_pct", y="index_name", color="color_group", orientation="h",
-        labels={"total_return_pct": "Total Return (%)", "index_name": "", "color_group": "Performance"},
+        labels={"total_return_pct": "Total return (%)", "index_name": "Market index", "color_group": "Performance"},
         color_discrete_map=PERFORMANCE_COLORS,
     )
+    if highlight_index != "None" and highlight_index in set(ret_df["index_name"]):
+        for trace in fig.data:
+            trace.marker.opacity = [
+                1.0 if index_name == highlight_index else 0.28
+                for index_name in ret_df.loc[ret_df["color_group"] == trace.name, "index_name"]
+            ]
+            trace.marker.line = dict(width=0.8, color="#ffffff")
     fig.add_vline(x=0, line_width=1, line_dash="dash", line_color="#667085")
     max_abs_return = ret_df["total_return_pct"].abs().max()
     centered_range = [-max_abs_return * 1.12, max_abs_return * 1.12] if max_abs_return > 0 else [-1, 1]
@@ -297,13 +314,15 @@ def make_top_indices_bar_chart(df: pd.DataFrame, height: int = 240) -> go.Figure
     )
     return fig
 
-def make_daily_return_boxplot(df: pd.DataFrame, group_by_col: str, height: int = 240) -> go.Figure:
+def make_daily_return_boxplot(df: pd.DataFrame, group_by_col: str, highlight_index: str = "None", height: int = 240) -> go.Figure:
     df = df.copy()
     df["proximity_label"] = df["tariff_event_nearby"].map({True: "Near Tariff Event (+/-10d)", False: "Normal Days"})
+    if group_by_col == "index_name" and highlight_index != "None" and highlight_index in set(df["index_name"]):
+        df = df[df["index_name"] == highlight_index].copy()
     
     fig = px.box(
         df.dropna(subset=["daily_return_pct"]), x=group_by_col, y="daily_return_pct", color="proximity_label",
-        labels={"daily_return_pct": "Daily Return (%)", group_by_col: "", "proximity_label": "Proximity"},
+        labels={"daily_return_pct": "Daily return (%)", group_by_col: "Country" if group_by_col == "country" else "Market index", "proximity_label": "Proximity"},
         color_discrete_map=EVENT_COLORS,
         points=False
     )
@@ -504,27 +523,6 @@ def render_financial_market_tab() -> None:
         st.warning("No market data match the country and index filters.")
         return
 
-    latest = make_latest_table(filtered_all_days, ["country", "index_name"])
-    leader = latest.sort_values("indexed_to_100", ascending=False).iloc[0] if not latest.empty else None
-    laggard = latest.sort_values("indexed_to_100", ascending=True).iloc[0] if not latest.empty else None
-    event_avg = filtered_all_days.loc[filtered_all_days["tariff_event_nearby"] == True, "daily_return_pct"].mean()
-    normal_avg = filtered_all_days.loc[filtered_all_days["tariff_event_nearby"] == False, "daily_return_pct"].mean()
-    
-    leader_text = f"{leader['index_name']} ({leader['indexed_to_100']:.1f})" if leader is not None else "n/a"
-    laggard_text = f"{laggard['index_name']} ({laggard['indexed_to_100']:.1f})" if laggard is not None else "n/a"
-    
-    st.markdown(
-        f"""
-        <div class="market-kpis">
-            <div class="market-kpi"><span>Markets covered</span><strong>{filtered_all_days['index_name'].nunique()}</strong></div>
-            <div class="market-kpi"><span>Best latest index</span><strong>{leader_text}</strong></div>
-            <div class="market-kpi"><span>Weakest latest index</span><strong>{laggard_text}</strong></div>
-            <div class="market-kpi"><span>Avg Event Return vs Normal</span><strong>{format_pct(event_avg)} (vs {format_pct(normal_avg)})</strong></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
     filtered = filtered_all_days.copy()
 
     # Layout Top Row: 3 Charts
@@ -559,7 +557,7 @@ def render_financial_market_tab() -> None:
         )
     with top_right:
         avg_return_fig = _compact_figure(
-            make_avg_return_comparison_chart(filtered_all_days, height=compact_height),
+            make_avg_return_comparison_chart(filtered_all_days, highlight_index=highlight_index, height=compact_height),
             "Avg Daily Return (Event vs Normal)"
         )
         avg_return_fig.update_layout(
@@ -583,15 +581,16 @@ def render_financial_market_tab() -> None:
     with bottom_left:
         st.plotly_chart(
             _compact_figure(
-                make_top_indices_bar_chart(filtered_all_days, height=compact_height),
+                make_top_indices_bar_chart(filtered_all_days, highlight_index=highlight_index, height=compact_height),
                 "Total Return by Index"
             ),
             use_container_width=True, config={"displayModeBar": False}
         )
     with bottom_right:
+        box_highlight = highlight_index if group_col == "index_name" else "None"
         st.plotly_chart(
             _compact_figure(
-                make_daily_return_boxplot(filtered_all_days, group_col, height=compact_height),
+                make_daily_return_boxplot(filtered_all_days, group_col, highlight_index=box_highlight, height=compact_height),
                 f"Daily Return Dist ({group_by})"
             ),
             use_container_width=True, config={"displayModeBar": False}

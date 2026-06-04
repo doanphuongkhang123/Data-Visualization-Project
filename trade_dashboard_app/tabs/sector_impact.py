@@ -238,66 +238,8 @@ def render_sector_impact_tab() -> None:
         st.warning("No sector data match the current filters.")
         return
 
-    vol_work = filtered.dropna(subset=["volatility_10d"]).copy()
-    ret_work = filtered.dropna(subset=["daily_return_pct"]).copy()
-    if not vol_work.empty:
-        avg_vol = (
-            vol_work.groupby("sector_label", as_index=False)
-            .agg(avg_volatility=("volatility_10d", "mean"))
-            .sort_values("avg_volatility", ascending=False)
-        )
-        top_vol = avg_vol.iloc[0]
-    else:
-        top_vol = None
-    if not ret_work.empty:
-        avg_ret = (
-            ret_work.groupby("sector_label", as_index=False)
-            .agg(avg_return=("daily_return_pct", "mean"))
-            .sort_values("avg_return", ascending=True)
-        )
-        low_ret = avg_ret.iloc[0]
-    else:
-        low_ret = None
-
-    if not vol_work.empty:
-        sensitivity_order = ["High", "Medium", "Low"]
-        vol_by_sens = (
-            vol_work.groupby("tariff_sensitivity", as_index=False)
-            .agg(avg_volatility=("volatility_10d", "mean"))
-        )
-        if vol_by_sens.empty:
-            vol_summary = "N/A"
-        else:
-            vol_by_sens["order"] = vol_by_sens["tariff_sensitivity"].map(
-                {label: idx for idx, label in enumerate(sensitivity_order)}
-            )
-            vol_by_sens = vol_by_sens.sort_values("order")
-            vol_summary = ", ".join(
-                f"{row.tariff_sensitivity}: {row.avg_volatility:.2f}"
-                for row in vol_by_sens.itertuples()
-            )
-    else:
-        vol_summary = "N/A"
-
-    top_vol_str = f"{top_vol['sector_label']} ({top_vol['avg_volatility']:.2f})" if top_vol is not None else "N/A"
-    low_ret_str = f"{low_ret['sector_label']} ({low_ret['avg_return']:.2f}%)" if low_ret is not None else "N/A"
-    trend_str = vol_summary
-
-    st.markdown(
-        f"""
-        <div class="impact-kpis">
-            <div class="impact-kpi"><span>Countries Selected</span><strong>{len(selected_countries)}</strong></div>
-            <div class="impact-kpi"><span>Sectors Selected</span><strong>{len(selected_sectors)}</strong></div>
-            <div class="impact-kpi"><span>Highest Volatility</span><strong>{escape(top_vol_str)}</strong></div>
-            <div class="impact-kpi"><span>Lowest Return</span><strong>{escape(low_ret_str)}</strong></div>
-            <div class="impact-kpi"><span>Avg Volatility by Sensitivity</span><strong>{escape(trend_str)}</strong></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
     performance_height = 280
-    secondary_height = 220
+    secondary_height = performance_height
 
     top_left, top_right = st.columns([2, 1])
     with top_left:
@@ -325,22 +267,16 @@ def render_sector_impact_tab() -> None:
             config={"displayModeBar": False},
         )
 
-    bottom_left, bottom_mid, bottom_right = st.columns(3)
+    bottom_left, bottom_right = st.columns([2, 1])
     with bottom_left:
         st.plotly_chart(
-            _compact_figure(make_sector_volatility_boxplot(filtered), height=secondary_height),
-            use_container_width=True,
-            config={"displayModeBar": False},
-        )
-    with bottom_mid:
-        st.plotly_chart(
-            _compact_figure(make_sector_sensitivity_breakdown(filtered), height=secondary_height),
+            _compact_figure(make_sector_return_volatility_scatter(filtered), height=secondary_height),
             use_container_width=True,
             config={"displayModeBar": False},
         )
     with bottom_right:
         st.plotly_chart(
-            _compact_figure(make_sector_return_volatility_scatter(filtered), height=secondary_height),
+            _compact_figure(make_sector_volatility_boxplot(filtered), height=secondary_height),
             use_container_width=True,
             config={"displayModeBar": False},
         )
