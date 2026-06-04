@@ -6,19 +6,20 @@ from core import *
 
 
 # ── Colour palette ──────────────────────────────────────────────────────
-ACCENT_TEAL = "#227c74"
-ACCENT_CORAL = "#b15c63"
-ACCENT_GOLD = "#d9895b"
-ACCENT_BLUE = "#4c78a8"
-ACCENT_PURPLE = "#7b61a8"
-ACCENT_SIMPLE = "#2f3a4a"
+ACCENT_TEAL = "#009E73"
+ACCENT_CORAL = "#D55E00"
+ACCENT_GOLD = "#E69F00"
+ACCENT_BLUE = "#0072B2"
+ACCENT_PURPLE = "#CC79A7"
+ACCENT_SIMPLE = "#20242a"
+GRID_COLOR = "#e9edf3"
 
-KPI_PALETTE = [ACCENT_SIMPLE] * 5
+KPI_PALETTE = [ACCENT_SIMPLE, ACCENT_BLUE, ACCENT_GOLD, ACCENT_TEAL, ACCENT_PURPLE]
 BAR_COLOR_SCALE = [
-    [0, "#e0f0ee"],
-    [0.35, "#88c4bc"],
-    [0.65, "#3a9e91"],
-    [1, ACCENT_TEAL],
+    [0, "#e7f1f7"],
+    [0.35, "#9ecae1"],
+    [0.65, "#4292c6"],
+    [1, ACCENT_BLUE],
 ]
 
 TYPE_ACCENT = {
@@ -27,9 +28,105 @@ TYPE_ACCENT = {
     "Retaliation": ACCENT_GOLD,
     "Reduction": ACCENT_BLUE,
     "Universal Baseline": ACCENT_PURPLE,
-    "Expansion": "#8a8f36",
-    "Export Restriction": "#6b7a8f",
+    "Expansion": "#56B4E9",
+    "Export Restriction": "#332288",
 }
+
+COUNTRY_FLOW_POSITIONS = {
+    "CAN": (0.08, 0.82),
+    "USA": (0.10, 0.56),
+    "MEX": (0.14, 0.24),
+    "GBR": (0.39, 0.79),
+    "EU27": (0.52, 0.62),
+    "IND": (0.70, 0.28),
+    "CHN": (0.84, 0.59),
+    "JPN": (0.96, 0.68),
+    "GLOBAL": (0.50, 0.96),
+}
+
+
+def _geographic_flow_layout(
+    nodes: list[str],
+    edges: pd.DataFrame,
+) -> dict[str, tuple[float, float]]:
+    """Deterministic, geography-anchored layout for the country flow graph."""
+    positions = {
+        node: COUNTRY_FLOW_POSITIONS[node]
+        for node in nodes
+        if node in COUNTRY_FLOW_POSITIONS
+    }
+    fallback_nodes = [node for node in nodes if node not in positions]
+    for idx, node in enumerate(fallback_nodes):
+        angle = 2 * math.pi * idx / max(len(fallback_nodes), 1)
+        positions[node] = (
+            0.50 + 0.32 * math.cos(angle),
+            0.52 + 0.26 * math.sin(angle),
+        )
+
+    anchors = positions.copy()
+    if len(nodes) <= 2:
+        return positions
+
+    edge_pairs = [
+        (row["imposing_clean"], row["target_clean"], row["events"])
+        for _, row in edges.iterrows()
+        if row["imposing_clean"] in positions and row["target_clean"] in positions
+    ]
+    max_weight = max((weight for _, _, weight in edge_pairs), default=1)
+    ideal_length = 0.38
+
+    for _ in range(180):
+        forces = {node: [0.0, 0.0] for node in nodes}
+
+        for i, left in enumerate(nodes):
+            lx, ly = positions[left]
+            for right in nodes[i + 1:]:
+                rx, ry = positions[right]
+                dx = lx - rx
+                dy = ly - ry
+                dist = math.hypot(dx, dy) or 0.001
+                force = 0.0017 / (dist * dist)
+                fx = dx / dist * force
+                fy = dy / dist * force
+                forces[left][0] += fx
+                forces[left][1] += fy
+                forces[right][0] -= fx
+                forces[right][1] -= fy
+
+        for source, target, weight in edge_pairs:
+            sx, sy = positions[source]
+            tx, ty = positions[target]
+            dx = tx - sx
+            dy = ty - sy
+            dist = math.hypot(dx, dy) or 0.001
+            weighted_pull = 0.034 + 0.028 * (weight / max_weight) ** 0.5
+            force = weighted_pull * (dist - ideal_length)
+            fx = dx / dist * force
+            fy = dy / dist * force
+            forces[source][0] += fx
+            forces[source][1] += fy
+            forces[target][0] -= fx
+            forces[target][1] -= fy
+
+        for node in nodes:
+            x, y = positions[node]
+            ax, ay = anchors[node]
+            forces[node][0] += (ax - x) * 0.075
+            forces[node][1] += (ay - y) * 0.075
+
+        for node in nodes:
+            fx, fy = forces[node]
+            step = min(math.hypot(fx, fy), 0.012)
+            if step <= 0:
+                continue
+            scale = step / (math.hypot(fx, fy) or 1)
+            x, y = positions[node]
+            positions[node] = (
+                min(0.94, max(0.08, x + fx * scale)),
+                min(0.92, max(0.20, y + fy * scale)),
+            )
+
+    return positions
 
 # ── Sector normalisation map ───────────────────────────────────────────
 # Maps raw multi-category sector strings to a clean primary category.
@@ -135,9 +232,9 @@ def _render_kpi_cards(kpis: list[tuple]) -> None:
             background: #f7f9fb;
             border: 1px solid #d9dee7;
             border-radius: 10px;
-            padding: 1.25rem 0.8rem 1.1rem;
+            padding: 0.95rem 0.7rem 0.85rem;
             text-align: center;
-            min-height: 108px;
+            min-height: 92px;
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -148,7 +245,7 @@ def _render_kpi_cards(kpis: list[tuple]) -> None:
             transform: translateY(-2px);
         }}
         .kpi-value {{
-            font-size: 1.8rem;
+            font-size: 1.55rem;
             font-weight: 700;
             letter-spacing: -0.5px;
             line-height: 1.2;
@@ -202,7 +299,7 @@ def _render_kpi_cards(kpis: list[tuple]) -> None:
     </body>
     </html>
     """
-    components.html(html, height=135, scrolling=False)
+    components.html(html, height=112, scrolling=False)
 
 
 # ── Chart A: Trend Over Time (dual-axis) ───────────────────────────────
@@ -220,7 +317,7 @@ def _chart_trend_over_time(df: pd.DataFrame) -> go.Figure:
             x=yearly["year"],
             y=yearly["event_count"],
             name="Tariff Events",
-            marker_color=ACCENT_TEAL,
+            marker_color=ACCENT_BLUE,
             opacity=0.82,
             hovertemplate="<b>%{x}</b><br>Events: %{y}<extra></extra>",
             yaxis="y",
@@ -243,14 +340,15 @@ def _chart_trend_over_time(df: pd.DataFrame) -> go.Figure:
 
     fig.update_layout(
         title=dict(text="Tariff Activity & Average Rate by Year", font=dict(size=17)),
-        height=260,
+        height=340,
         margin=dict(l=0, r=10, t=56, b=0),
         legend=dict(orientation="h", y=-0.18, x=0.5, xanchor="center"),
-        xaxis=dict(title="", dtick=1, gridcolor="#eef1f6"),
+        xaxis=dict(title="", dtick=1, gridcolor=GRID_COLOR),
         yaxis=dict(
-            title=dict(text="Number of Events", font=dict(color=ACCENT_TEAL)),
-            tickfont=dict(color=ACCENT_TEAL),
-            gridcolor="#eef1f6",
+            title=dict(text="Number of Events", font=dict(color=ACCENT_BLUE)),
+            tickfont=dict(color=ACCENT_BLUE),
+            gridcolor=GRID_COLOR,
+            rangemode="tozero",
         ),
         yaxis2=dict(
             title=dict(text="Average Tariff Rate (%)", font=dict(color=ACCENT_CORAL)),
@@ -258,6 +356,7 @@ def _chart_trend_over_time(df: pd.DataFrame) -> go.Figure:
             overlaying="y",
             side="right",
             showgrid=False,
+            rangemode="tozero",
         ),
         plot_bgcolor="#ffffff",
         bargap=0.35,
@@ -298,7 +397,7 @@ def _chart_top_targets(df: pd.DataFrame) -> go.Figure:
         margin=dict(l=0, r=40, t=56, b=0),
         coloraxis_showscale=False,
         yaxis=dict(autorange="reversed", tickfont=dict(size=12)),
-        xaxis=dict(gridcolor="#eef1f6", title=""),
+        xaxis=dict(gridcolor=GRID_COLOR, title="", rangemode="tozero"),
         plot_bgcolor="#ffffff",
     )
     # Reverse so largest on top
@@ -323,10 +422,10 @@ def _chart_top_sectors(df: pd.DataFrame) -> go.Figure:
         orientation="h",
         color="events",
         color_continuous_scale=[
-            [0, "#fce8de"],
-            [0.35, "#e8a988"],
-            [0.65, "#d17e55"],
-            [1, ACCENT_GOLD],
+            [0, "#fff2df"],
+            [0.35, "#f1c27d"],
+            [0.65, "#e69f00"],
+            [1, ACCENT_CORAL],
         ],
         labels={"events": "Number of Tariff Actions", "sector_clean": ""},
     )
@@ -342,7 +441,7 @@ def _chart_top_sectors(df: pd.DataFrame) -> go.Figure:
         margin=dict(l=0, r=40, t=56, b=0),
         coloraxis_showscale=False,
         yaxis=dict(tickfont=dict(size=11)),
-        xaxis=dict(gridcolor="#eef1f6", title=""),
+        xaxis=dict(gridcolor=GRID_COLOR, title="", rangemode="tozero"),
         plot_bgcolor="#ffffff",
     )
     fig.update_yaxes(autorange=True)
@@ -478,63 +577,40 @@ def _chart_country_action_flow(
         fig.update_layout(height=260, margin=dict(l=0, r=0, t=40, b=0))
         return fig
 
-    nodes = sorted(node_set)
-    node_labels = [entity_label(c) for c in nodes]
-    node_metrics = (
-        involvement.groupby("country", as_index=False)["events"]
-        .sum()
-        .set_index("country")["events"]
-    )
-
-    count = len(nodes)
-    angles = [2 * math.pi * i / count for i in range(count)]
-    radius = 0.38
-    positions = {
-        node: (0.5 + radius * math.cos(angle), 0.5 + radius * math.sin(angle))
-        for node, angle in zip(nodes, angles)
-    }
-
-    metric_values = [node_metrics.get(node, 0) for node in nodes]
-    min_size, max_size = 14, 28
-    if metric_values:
-        min_val, max_val = min(metric_values), max(metric_values)
-        if max_val > min_val:
-            sizes = [
-                min_size + (val - min_val) / (max_val - min_val) * (max_size - min_size)
-                for val in metric_values
-            ]
-        else:
-            sizes = [min_size for _ in metric_values]
-    else:
-        sizes = [min_size for _ in nodes]
-
-    x_nodes = [positions[node][0] for node in nodes]
-    y_nodes = [positions[node][1] for node in nodes]
-    hover_nodes = [
-        f"<b>{label}</b><br>Actions involved: {node_metrics.get(node, 0)}"
-        for node, label in zip(nodes, node_labels)
-    ]
-
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=x_nodes,
-            y=y_nodes,
-            mode="markers+text",
-            text=node_labels,
-            textposition="bottom center",
-            textfont=dict(size=10, color="#1f2933"),
-            marker=dict(size=sizes, color="#cbd5e1", line=dict(color="#ffffff", width=1)),
-            hovertext=hover_nodes,
-            hoverinfo="text",
-        )
-    )
-
     top_edges = flow.sort_values("events", ascending=False).head(18)
     max_edge = top_edges["events"].max() if not top_edges.empty else 1
     min_edge = top_edges["events"].min() if not top_edges.empty else 0
 
-    annotations = []
+    nodes = sorted(
+        set(top_edges["imposing_clean"]) | set(top_edges["target_clean"]),
+        key=lambda c: (
+            top_nodes.set_index("country")["events"].get(c, 0),
+            entity_label(c),
+        ),
+        reverse=True,
+    )
+    node_labels = [entity_label(c) for c in nodes]
+    out_degree = top_edges.groupby("imposing_clean")["events"].sum()
+    in_degree = top_edges.groupby("target_clean")["events"].sum()
+    weighted_degree = {
+        node: out_degree.get(node, 0) + in_degree.get(node, 0)
+        for node in nodes
+    }
+    net_outgoing = {
+        node: out_degree.get(node, 0) - in_degree.get(node, 0)
+        for node in nodes
+    }
+
+    positions = _geographic_flow_layout(nodes, top_edges)
+
+    max_degree = max(weighted_degree.values()) if weighted_degree else 1
+    sizes = [
+        15 + 18 * (weighted_degree[node] / max_degree) ** 0.5
+        for node in nodes
+    ]
+
+    fig = go.Figure()
+
     for _, row in top_edges.iterrows():
         source = row["imposing_clean"]
         target = row["target_clean"]
@@ -549,37 +625,133 @@ def _chart_country_action_flow(
         tx = end_x - dx / dist * offset
         ty = end_y - dy / dist * offset
         if max_edge > min_edge:
-            arrow_width = 1 + (row["events"] - min_edge) / (max_edge - min_edge) * 2
+            edge_width = 1 + (row["events"] - min_edge) / (max_edge - min_edge) * 3
         else:
-            arrow_width = 1.5
-        annotations.append(
-            dict(
-                ax=sx,
-                ay=sy,
-                x=tx,
-                y=ty,
-                xref="x",
-                yref="y",
-                axref="x",
-                ayref="y",
-                showarrow=True,
-                arrowhead=3,
-                arrowsize=1,
-                arrowwidth=arrow_width,
-                arrowcolor="rgba(34, 124, 116, 0.55)",
-                opacity=0.9,
+            edge_width = 1.8
+
+        # Draw a curved edge and a small arrowhead along the curve tangent.
+        curve = 0.12 if source < target else -0.12
+        mid_x = (sx + tx) / 2
+        mid_y = (sy + ty) / 2
+        norm_x = -dy / dist
+        norm_y = dx / dist
+        ctrl_x = mid_x + norm_x * curve
+        ctrl_y = mid_y + norm_y * curve
+        edge_color = "rgba(0, 114, 178, 0.34)"
+        steps = 18
+        xs = []
+        ys = []
+        for step in range(steps + 1):
+            t = step / steps
+            xs.append((1 - t) ** 2 * sx + 2 * (1 - t) * t * ctrl_x + t ** 2 * tx)
+            ys.append((1 - t) ** 2 * sy + 2 * (1 - t) * t * ctrl_y + t ** 2 * ty)
+        fig.add_trace(
+            go.Scatter(
+                x=xs,
+                y=ys,
+                mode="lines",
+                line=dict(width=edge_width, color=edge_color),
+                hoverinfo="skip",
+                showlegend=False,
             )
         )
 
+        tangent_x = tx - ctrl_x
+        tangent_y = ty - ctrl_y
+        tangent_len = math.hypot(tangent_x, tangent_y) or 1
+        unit_x = tangent_x / tangent_len
+        unit_y = tangent_y / tangent_len
+        perp_x = -unit_y
+        perp_y = unit_x
+        head_len = 0.028
+        head_spread = 0.012
+        base_x = tx - unit_x * head_len
+        base_y = ty - unit_y * head_len
+        left_x = base_x + perp_x * head_spread
+        left_y = base_y + perp_y * head_spread
+        right_x = base_x - perp_x * head_spread
+        right_y = base_y - perp_y * head_spread
+        fig.add_trace(
+            go.Scatter(
+                x=[left_x, tx, right_x],
+                y=[left_y, ty, right_y],
+                mode="lines",
+                line=dict(width=max(1.2, edge_width * 0.8), color=edge_color),
+                hoverinfo="skip",
+                showlegend=False,
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[ctrl_x],
+                y=[ctrl_y],
+                mode="markers",
+                marker=dict(size=max(8, edge_width * 4), color="rgba(0,0,0,0)"),
+                hovertext=(
+                    f"<b>{entity_label(source)} -> {entity_label(target)}</b><br>"
+                    f"Tariff actions: {row['events']}"
+                ),
+                hoverinfo="text",
+                showlegend=False,
+            )
+        )
+
+    x_nodes = [positions[node][0] for node in nodes]
+    y_nodes = [positions[node][1] for node in nodes]
+    hover_nodes = [
+        f"<b>{label}</b><br>"
+        f"Weighted degree: {weighted_degree[node]}<br>"
+        f"Outgoing actions: {out_degree.get(node, 0)}<br>"
+        f"Incoming actions: {in_degree.get(node, 0)}"
+        for node, label in zip(nodes, node_labels)
+    ]
+
+    fig.add_trace(
+        go.Scatter(
+            x=x_nodes,
+            y=y_nodes,
+            mode="markers+text",
+            text=node_labels,
+            textposition="bottom center",
+            textfont=dict(size=10, color="#1f2933"),
+            marker=dict(
+                size=sizes,
+                color=[net_outgoing[node] for node in nodes],
+                colorscale=[
+                    [0, ACCENT_CORAL],
+                    [0.5, "#cbd5e1"],
+                    [1, ACCENT_BLUE],
+                ],
+                cmid=0,
+                line=dict(color="#ffffff", width=1.2),
+                colorbar=dict(
+                    title=dict(text="Net outgoing", font=dict(size=10)),
+                    thickness=8,
+                    len=0.68,
+                    x=1.02,
+                    tickfont=dict(size=10),
+                ),
+            ),
+            hovertext=hover_nodes,
+            hoverinfo="text",
+            showlegend=False,
+        )
+    )
+
     year_suffix = "All years" if year_filter is None else f"{year_filter}"
     fig.update_layout(
-        title=dict(text=f"Tariff Action Flows by Country ({year_suffix})", font=dict(size=17)),
-        height=260,
-        margin=dict(l=0, r=0, t=56, b=0),
-        annotations=annotations,
+        title=dict(
+            text=(
+                f"Tariff Action Flows by Country ({year_suffix})"
+                "<br><sup>Geographic relative layout; node size = weighted degree, edge width = action count.</sup>"
+            ),
+            font=dict(size=17),
+        ),
+        height=340,
+        margin=dict(l=0, r=28, t=70, b=8),
         plot_bgcolor="#ffffff",
         xaxis=dict(visible=False, range=[0, 1]),
-        yaxis=dict(visible=False, range=[0, 1], scaleanchor="x", scaleratio=1),
+        yaxis=dict(visible=False, range=[0, 1]),
     )
     return fig
 
@@ -592,8 +764,26 @@ def render_executive_overview_tab() -> None:
     # ── Page header ─────────────────────────────────────────────────────
     st.markdown(
         """
-        <div class="page-title">
-            <div>
+        <style>
+        .eo-page-title {
+            margin-top: -0.7rem;
+            margin-bottom: 0.35rem;
+            padding-bottom: 0.28rem;
+        }
+        .eo-compact-title h1 {
+            font-size: 1.35rem;
+            line-height: 1.2;
+            margin: 0;
+        }
+        .eo-compact-title p {
+            margin: 0;
+            color: #667085;
+            font-size: 0.82rem;
+            line-height: 1.15;
+        }
+        </style>
+        <div class="page-title eo-page-title">
+            <div class="eo-compact-title">
                 <h1>Executive Overview</h1>
                 <p>High-level narrative of the global trade war — policy actions, affected economies, and key milestones.</p>
             </div>
@@ -606,16 +796,26 @@ def render_executive_overview_tab() -> None:
         st.warning("No official tariff events found after filtering out news alerts.")
         return
 
-    # ── Compute KPI metrics ─────────────────────────────────────────────
-    total_events = len(df)
-    avg_rate = df["tariff_rate_pct"].mean()
-    total_trade_value = df["estimated_trade_value_usd_bn"].sum()
+    year_options = ["All years"] + sorted(df["year"].dropna().unique().tolist())
+    year_choice = st.selectbox(
+        "Filter executive overview by year",
+        options=year_options,
+        index=0,
+        help="Updates KPIs, action mix, sectors, and the country action network.",
+    )
+    selected_year = None if year_choice == "All years" else int(year_choice)
+    filtered_df = df if selected_year is None else df[df["year"] == selected_year].copy()
 
-    all_countries = set(df["imposing_clean"].dropna().unique()) | set(
-        df["target_clean"].dropna().unique()
+    # ── Compute KPI metrics ─────────────────────────────────────────────
+    total_events = len(filtered_df)
+    avg_rate = filtered_df["tariff_rate_pct"].mean()
+    total_trade_value = filtered_df["estimated_trade_value_usd_bn"].sum()
+
+    all_countries = set(filtered_df["imposing_clean"].dropna().unique()) | set(
+        filtered_df["target_clean"].dropna().unique()
     )
     countries_involved = len(all_countries)
-    sectors_affected = df["sector_clean"].nunique()
+    sectors_affected = filtered_df["sector_clean"].nunique()
 
     if total_trade_value >= 1000:
         tv_target = total_trade_value / 1000
@@ -634,46 +834,33 @@ def render_executive_overview_tab() -> None:
     ]
     _render_kpi_cards(kpis)
 
-    st.markdown("<div style='height: 0.6rem;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 0.15rem;'></div>", unsafe_allow_html=True)
 
     # ── Filters ───────────────────────────────────────────────────────
-    year_options = ["All years"] + sorted(df["year"].dropna().unique().tolist())
-    year_choice = st.selectbox(
-        "Filter country network by year",
-        options=year_options,
-        index=0,
-        help="Limits the country action network to a single year.",
-    )
-    selected_year = None if year_choice == "All years" else int(year_choice)
-
     # ── Row 2: Trend + Targets + Sectors ───────────────────────────────
-    col_trend, col_targets, col_sectors = st.columns(3, gap="medium")
+    col_trend, col_flow = st.columns(2, gap="medium")
 
     with col_trend:
         st.plotly_chart(
-            _chart_trend_over_time(df), use_container_width=True, key="eo_trend"
-        )
-    with col_targets:
-        st.plotly_chart(
-            _chart_top_targets(df), use_container_width=True, key="eo_targets"
-        )
-    with col_sectors:
-        st.plotly_chart(
-            _chart_top_sectors(df), use_container_width=True, key="eo_sectors"
-        )
-
-    # ── Row 3: Action Type + Country action network ───────────────────
-    col_donut, col_flow = st.columns(2, gap="medium")
-
-    with col_donut:
-        st.plotly_chart(
-            _chart_action_type_breakdown(df), use_container_width=True, key="eo_types"
+            _chart_trend_over_time(filtered_df), use_container_width=True, key="eo_trend"
         )
     with col_flow:
         st.plotly_chart(
             _chart_country_action_flow(df, selected_year),
             use_container_width=True,
             key="eo_country_flow",
+        )
+
+    # ── Row 3: Action Type + Country action network ───────────────────
+    col_donut, col_sectors = st.columns(2, gap="medium")
+
+    with col_donut:
+        st.plotly_chart(
+            _chart_action_type_breakdown(filtered_df), use_container_width=True, key="eo_types"
+        )
+    with col_sectors:
+        st.plotly_chart(
+            _chart_top_sectors(filtered_df), use_container_width=True, key="eo_sectors"
         )
 
     # ── Source note ─────────────────────────────────────────────────────

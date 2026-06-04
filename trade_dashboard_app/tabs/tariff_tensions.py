@@ -25,13 +25,21 @@ def _missing_selected_periods(df: pd.DataFrame, selected_periods: list[str], ind
 def _compact_figure(fig: go.Figure) -> go.Figure:
     fig.update_layout(
         showlegend=False,
-        margin=dict(l=6, r=6, t=48, b=24),
+        margin=dict(l=12, r=30, t=58, b=42),
         title=dict(font=dict(size=13)),
         hovermode="closest",
     )
     fig.update_xaxes(title_font=dict(size=10), tickfont=dict(size=10))
     fig.update_yaxes(title_font=dict(size=10), tickfont=dict(size=10))
-    fig.update_coloraxes(colorbar=dict(thickness=8, len=0.72, tickfont=dict(size=9), title_font=dict(size=9)))
+    fig.update_coloraxes(
+        colorbar=dict(
+            thickness=8,
+            len=0.68,
+            x=1.02,
+            tickfont=dict(size=9),
+            title_font=dict(size=9),
+        )
+    )
     return fig
 
 
@@ -57,7 +65,7 @@ def _checkbox_dropdown(label: str, options: list[str], default: list[str], key_p
 
     selected = []
     selected_count = _selected_count(options, default, key_prefix)
-    with st.popover(f"{label} ({selected_count})"):
+    with st.popover(f"{label} ({selected_count})", use_container_width=True):
         st.checkbox(
             "Select all",
             key=f"{key_prefix}_select_all",
@@ -112,7 +120,7 @@ def render_tariff_tensions_tab() -> None:
     years = sorted(macro["year"].dropna().astype(int).unique().tolist())
     country_options = sorted(macro["country"].dropna().unique())
     period_options = [p for p in PERIOD_ORDER if p in macro["period"].dropna().unique()]
-    compact_height = 220
+    compact_height = 280
 
     st.markdown(
         """
@@ -122,20 +130,23 @@ def render_tariff_tensions_tab() -> None:
             width: 100% !important;
             padding-left: 0.8rem !important;
             padding-right: 0.8rem !important;
-            padding-top: 3.5rem !important;
+            padding-top: 3rem !important;
         }
         .page-title {
-            margin-bottom: 0.45rem;
+            margin-top: -0.7rem;
+            margin-bottom: 0.55rem;
             padding-bottom: 0.35rem;
         }
         .impact-compact-title h1 {
             font-size: 1.35rem;
-            margin: 0 0 0.1rem;
+            line-height: 1.2;
+            margin: 0;
         }
         .impact-compact-title p {
             margin: 0;
             color: #667085;
             font-size: 0.82rem;
+            line-height: 1.15;
         }
         div[data-testid="stMetric"] {
             padding: 0.45rem 0.6rem;
@@ -149,45 +160,71 @@ def render_tariff_tensions_tab() -> None:
         .impact-kpis {
             display: grid;
             grid-template-columns: repeat(5, minmax(0, 1fr));
-            gap: 0.45rem;
-            margin: 0.15rem 0 0.45rem;
+            gap: 0.7rem;
+            margin: 0.35rem 0 0.9rem;
         }
         .impact-kpi {
             border: 1px solid #d9dee7;
+            border-top: 3px solid #20242a;
+            color: #20242a;
             background: #f7f9fb;
             border-radius: 6px;
-            padding: 0.35rem 0.5rem;
+            padding: 0.8rem 0.65rem 0.7rem;
             min-width: 0;
+            min-height: 92px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: center;
         }
+        .impact-kpi:nth-child(2) { border-top-color: #0072B2; color: #0072B2; }
+        .impact-kpi:nth-child(3) { border-top-color: #E69F00; color: #E69F00; }
+        .impact-kpi:nth-child(4) { border-top-color: #009E73; color: #009E73; }
+        .impact-kpi:nth-child(5) { border-top-color: #CC79A7; color: #CC79A7; }
         .impact-kpi span {
             display: block;
             color: #667085;
             font-size: 0.68rem;
-            line-height: 1.05;
+            line-height: 1.1;
+            margin-top: 0.35rem;
+            text-transform: uppercase;
+            letter-spacing: 0.45px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            order: 2;
         }
         .impact-kpi strong {
             display: block;
-            color: #20242a;
-            font-size: 0.92rem;
+            color: inherit;
+            font-size: 1.25rem;
+            font-weight: 700;
             line-height: 1.15;
-            margin-top: 0.1rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            order: 1;
+        }
+        .impact-kpi::after {
+            content: "";
+            width: 28px;
+            height: 3px;
+            border-radius: 2px;
+            background: currentColor;
+            margin: 0.45rem auto 0;
+            order: 3;
         }
         div[data-testid="stVerticalBlock"] {
-            gap: 0.35rem;
+            gap: 0.75rem;
         }
         div[data-testid="stHorizontalBlock"] {
-            gap: 0.55rem;
+            gap: 0.75rem;
         }
         div[data-testid="stPlotlyChart"] {
             border: 1px solid #e5e9f0;
             border-radius: 6px;
-            overflow: hidden;
+            overflow: visible;
+            margin-bottom: 0.45rem;
         }
         .impact-country-legend {
             display: flex;
@@ -198,7 +235,7 @@ def render_tariff_tensions_tab() -> None:
             border-radius: 6px;
             background: #ffffff;
             padding: 0.34rem 0.55rem;
-            margin: -0.05rem 0 0.1rem;
+            margin: 0.25rem 0 0.75rem;
             min-height: 1.85rem;
         }
         .impact-country-legend-title {
@@ -233,13 +270,17 @@ def render_tariff_tensions_tab() -> None:
         """,
         unsafe_allow_html=True,
     )
+    st.markdown("<div style='height: 0.05rem;'></div>", unsafe_allow_html=True)
 
     default_countries = [
         c
         for c in ["USA", "China", "Vietnam", "Germany", "Mexico"]
         if c in country_options
     ]
-    c1, c2, c3, c4, c5, c6, c7 = st.columns([1.0, 0.92, 0.9, 0.72, 1.0, 0.62, 0.85])
+    c1, c2, c3, c4, c5, c6 = st.columns(
+        [1.25, 1.15, 0.95, 0.72, 1.0, 0.9],
+        vertical_alignment="bottom",
+    )
     with c1:
         selected_countries = _checkbox_dropdown(
             "Countries",
@@ -285,13 +326,8 @@ def render_tariff_tensions_tab() -> None:
             index=yoy_indicator_options.index(EXPORTS) if EXPORTS in yoy_indicator_options else 0,
             key="impact_yoy_indicator",
         )
+    robust_yoy_display = True
     with c6:
-        robust_yoy_display = st.checkbox(
-            "Robust YoY",
-            value=True,
-            key="impact_robust_yoy_scale",
-        )
-    with c7:
         fdi_display_mode = st.selectbox(
             "FDI display",
             ["Absolute USD", "Indexed to 100"],
