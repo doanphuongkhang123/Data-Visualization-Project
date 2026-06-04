@@ -4,14 +4,11 @@ Prototype inspired by WTO trade dashboards.
 
 Current tabs:
 
-- `Trade Volume`: annual goods and services trade overview.
-- `Global Tariff Tensions`: tariff events, retaliation, sector exposure, maps, rate distributions, and a directed tariff network.
+- `Executive Overview`: headline trade-war context and cross-dataset indicators.
+- `Trade and Macro Impact`: tariff events, retaliation, sector exposure, maps, rate distributions, and a directed tariff network.
 - `Financial Market Reaction`: stock-index performance, event-day return distributions, volatility, and annual return heatmaps.
-- `Exchange Rate Pressure`: currency movement versus USD, volatility, event-day moves, and 30-day pressure.
 - `Sectoral Impact`: sector ETF performance, latest sector heatmap, tariff-sensitivity returns, and volatility.
 - `Inflation & Currency Response`: US price pressure, US-China trade flows, US total trade balance, currency rates versus USD, rolling 7-day volatility, and currency movement around tariff events.
-- `Vietnam Impact`: Vietnam trade/macro indicators, VND pressure, VN-Index performance, and direct tariff-event checks.
-- `Long-term Macro Adjustment`: annual macro indicators, period distributions, country heatmaps, correlations, and US monthly adjustment series.
 
 ## Run
 
