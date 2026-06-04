@@ -127,7 +127,7 @@ def render_tariff_tensions_tab() -> None:
             width: 100% !important;
             padding-left: 0.8rem !important;
             padding-right: 0.8rem !important;
-            padding-top: 0.45rem !important;
+            padding-top: 3.5rem !important;
         }
         .page-title {
             margin-bottom: 0.45rem;
