@@ -43,7 +43,7 @@ def _checkbox_dropdown(label: str, options: list[str], default: list[str], key_p
 
     selected = []
     selected_count = _selected_count(options, default, key_prefix)
-    with st.popover(f"{label} ({selected_count})"):
+    with st.popover(f"{label} ({selected_count})", use_container_width=True):
         st.checkbox(
             "Select all",
             key=f"{key_prefix}_select_all",
@@ -78,20 +78,23 @@ def render_sector_impact_tab() -> None:
             width: 100% !important;
             padding-left: 0.8rem !important;
             padding-right: 0.8rem !important;
-            padding-top: 3.5rem !important;
+            padding-top: 3rem !important;
         }
         .page-title {
-            margin-bottom: 0.45rem;
-            padding-bottom: 0.35rem;
+            margin-top: -0.7rem;
+            margin-bottom: 0.35rem;
+            padding-bottom: 0.28rem;
         }
         .impact-compact-title h1 {
             font-size: 1.35rem;
-            margin: 0 0 0.1rem;
+            line-height: 1.2;
+            margin: 0;
         }
         .impact-compact-title p {
             margin: 0;
             color: #667085;
             font-size: 0.82rem;
+            line-height: 1.15;
         }
         div[data-testid="stMetric"] {
             padding: 0.45rem 0.6rem;
@@ -105,34 +108,59 @@ def render_sector_impact_tab() -> None:
         .impact-kpis {
             display: grid;
             grid-template-columns: repeat(5, minmax(0, 1fr));
-            gap: 0.45rem;
-            margin: 0.15rem 0 0.45rem;
+            gap: 0.7rem;
+            margin: 0.35rem 0 0.85rem;
         }
         .impact-kpi {
             border: 1px solid #d9dee7;
+            border-top: 3px solid #20242a;
+            color: #20242a;
             background: #f7f9fb;
             border-radius: 6px;
-            padding: 0.35rem 0.5rem;
+            padding: 0.8rem 0.65rem 0.7rem;
             min-width: 0;
+            min-height: 92px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: center;
         }
+        .impact-kpi:nth-child(2) { border-top-color: #0072B2; color: #0072B2; }
+        .impact-kpi:nth-child(3) { border-top-color: #E69F00; color: #E69F00; }
+        .impact-kpi:nth-child(4) { border-top-color: #D55E00; color: #D55E00; }
+        .impact-kpi:nth-child(5) { border-top-color: #CC79A7; color: #CC79A7; }
         .impact-kpi span {
             display: block;
             color: #667085;
             font-size: 0.68rem;
-            line-height: 1.05;
+            line-height: 1.1;
+            margin-top: 0.35rem;
+            text-transform: uppercase;
+            letter-spacing: 0.45px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            order: 2;
         }
         .impact-kpi strong {
             display: block;
-            color: #20242a;
-            font-size: 0.92rem;
+            color: inherit;
+            font-size: 1.25rem;
+            font-weight: 700;
             line-height: 1.15;
-            margin-top: 0.1rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            order: 1;
+        }
+        .impact-kpi::after {
+            content: "";
+            width: 28px;
+            height: 3px;
+            border-radius: 2px;
+            background: currentColor;
+            margin: 0.45rem auto 0;
+            order: 3;
         }
         div[data-testid="stVerticalBlock"] {
             gap: 0.35rem;
@@ -156,8 +184,27 @@ def render_sector_impact_tab() -> None:
         unsafe_allow_html=True,
     )
 
-    base = filter_by_date(df, "sector")
-    c1, c2, c3 = st.columns(3)
+    min_date = df["date"].min().date()
+    max_date = df["date"].max().date()
+    c_date, c1, c2, c3 = st.columns(
+        [0.82, 1.12, 1.12, 1.12],
+        vertical_alignment="bottom",
+    )
+    with c_date:
+        selected_date = st.date_input(
+            "Date range",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date,
+            key="sector_date_range",
+        )
+        if isinstance(selected_date, tuple) and len(selected_date) == 2:
+            start_date, end_date = pd.to_datetime(selected_date[0]), pd.to_datetime(selected_date[1])
+        else:
+            start_date, end_date = pd.to_datetime(min_date), pd.to_datetime(max_date)
+
+    base = df[(df["date"] >= start_date) & (df["date"] <= end_date)].copy()
+
     with c1:
         countries = sorted(base["country"].dropna().unique())
         selected_countries = _checkbox_dropdown("Countries", countries, countries, "sector_countries")

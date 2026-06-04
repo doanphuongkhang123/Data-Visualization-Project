@@ -1516,7 +1516,7 @@ def make_yoy_change_by_period_chart(
         x="period",
         y=y_col,
         color="indicator_name",
-        points="all",
+        points=False,
         category_orders={"period": PERIOD_ORDER},
         custom_data=["country", "year", "period", "indicator_name", "displayed_yoy", "original_yoy"],
         title=f"YoY change distribution by trade-war period{subtitle}",

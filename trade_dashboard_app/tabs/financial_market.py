@@ -285,11 +285,16 @@ def make_top_indices_bar_chart(df: pd.DataFrame, height: int = 240) -> go.Figure
         ret_df, x="total_return_pct", y="index_name", color="color_group", orientation="h",
         labels={"total_return_pct": "Total Return (%)", "index_name": "", "color_group": "Performance"},
         color_discrete_map=PERFORMANCE_COLORS,
-        pattern_shape="color_group",
-        pattern_shape_map={"Positive Return": "", "Negative Return": "/"},
     )
     fig.add_vline(x=0, line_width=1, line_dash="dash", line_color="#667085")
-    fig.update_layout(height=height, xaxis=dict(gridcolor="#e9edf3", tickformat="+.1f%", rangemode="tozero"), yaxis=dict(autorange="reversed"), plot_bgcolor="white")
+    max_abs_return = ret_df["total_return_pct"].abs().max()
+    centered_range = [-max_abs_return * 1.12, max_abs_return * 1.12] if max_abs_return > 0 else [-1, 1]
+    fig.update_layout(
+        height=height,
+        xaxis=dict(gridcolor="#e9edf3", tickformat="+.1f%", range=centered_range),
+        yaxis=dict(autorange="reversed"),
+        plot_bgcolor="white",
+    )
     return fig
 
 def make_daily_return_boxplot(df: pd.DataFrame, group_by_col: str, height: int = 240) -> go.Figure:
@@ -320,52 +325,79 @@ def render_financial_market_tab() -> None:
             width: 100% !important;
             padding-left: 0.8rem !important;
             padding-right: 0.8rem !important;
-            padding-top: 3.5rem !important;
+            padding-top: 3rem !important;
         }
         .page-title {
-            margin-bottom: 0.45rem;
-            padding-bottom: 0.35rem;
+            margin-top: -0.7rem;
+            margin-bottom: 0.35rem;
+            padding-bottom: 0.28rem;
         }
         .market-compact-title h1 {
             font-size: 1.35rem;
-            margin: 0 0 0.1rem;
+            line-height: 1.2;
+            margin: 0;
         }
         .market-compact-title p {
             margin: 0;
             color: #667085;
             font-size: 0.82rem;
+            line-height: 1.15;
         }
         .market-kpis {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 0.45rem;
-            margin: 0.15rem 0 0.45rem;
+            gap: 0.7rem;
+            margin: 0.35rem 0 0.85rem;
         }
         .market-kpi {
             border: 1px solid #d9dee7;
+            border-top: 3px solid #20242a;
+            color: #20242a;
             background: #f7f9fb;
             border-radius: 6px;
-            padding: 0.35rem 0.5rem;
+            padding: 0.8rem 0.65rem 0.7rem;
             min-width: 0;
+            min-height: 92px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: center;
         }
+        .market-kpi:nth-child(2) { border-top-color: #0072B2; color: #0072B2; }
+        .market-kpi:nth-child(3) { border-top-color: #D55E00; color: #D55E00; }
+        .market-kpi:nth-child(4) { border-top-color: #009E73; color: #009E73; }
         .market-kpi span {
             display: block;
             color: #667085;
             font-size: 0.68rem;
-            line-height: 1.05;
+            line-height: 1.1;
+            margin-top: 0.35rem;
+            text-transform: uppercase;
+            letter-spacing: 0.45px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            order: 2;
         }
         .market-kpi strong {
             display: block;
-            color: #20242a;
-            font-size: 0.92rem;
+            color: inherit;
+            font-size: 1.25rem;
+            font-weight: 700;
             line-height: 1.15;
-            margin-top: 0.1rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            order: 1;
+        }
+        .market-kpi::after {
+            content: "";
+            width: 28px;
+            height: 3px;
+            border-radius: 2px;
+            background: currentColor;
+            margin: 0.45rem auto 0;
+            order: 3;
         }
         div[data-testid="stVerticalBlock"] {
             gap: 0.35rem;
@@ -498,11 +530,23 @@ def render_financial_market_tab() -> None:
     # Layout Top Row: 3 Charts
     top_left, top_mid, top_right = st.columns(3)
     with top_left:
-        st.plotly_chart(
-            _compact_figure(
-                make_dynamic_performance_chart(filtered, highlight_index=highlight_index, show_shading=True, height=compact_height),
-                "Index Performance (Base=100)"
+        performance_fig = _compact_figure(
+            make_dynamic_performance_chart(filtered, highlight_index=highlight_index, show_shading=True, height=compact_height),
+            "Index Performance (Base=100)"
+        )
+        performance_fig.update_layout(
+            showlegend=True,
+            legend=dict(
+                title="Index",
+                orientation="h",
+                y=-0.26,
+                x=0,
+                font=dict(size=9),
             ),
+            margin=dict(l=6, r=6, t=32, b=64),
+        )
+        st.plotly_chart(
+            performance_fig,
             use_container_width=True, config={"displayModeBar": False}
         )
     with top_mid:
@@ -514,17 +558,25 @@ def render_financial_market_tab() -> None:
             use_container_width=True, config={"displayModeBar": False}
         )
     with top_right:
-        st.plotly_chart(
-            _compact_figure(
-                make_avg_return_comparison_chart(filtered_all_days, height=compact_height),
-                "Avg Daily Return (Event vs Normal)"
+        avg_return_fig = _compact_figure(
+            make_avg_return_comparison_chart(filtered_all_days, height=compact_height),
+            "Avg Daily Return (Event vs Normal)"
+        )
+        avg_return_fig.update_layout(
+            showlegend=True,
+            legend=dict(
+                title="Proximity",
+                orientation="h",
+                y=-0.26,
+                x=0,
+                font=dict(size=9),
             ),
+            margin=dict(l=6, r=6, t=32, b=64),
+        )
+        st.plotly_chart(
+            avg_return_fig,
             use_container_width=True, config={"displayModeBar": False}
         )
-
-    # Legends
-    color_map = {idx: MARKET_COLORS[i % len(MARKET_COLORS)] for i, idx in enumerate(sorted(available_indices))}
-    _render_market_legends(selected_indices, color_map)
 
     # Layout Bottom Row: 2 Charts
     bottom_left, bottom_right = st.columns(2)
