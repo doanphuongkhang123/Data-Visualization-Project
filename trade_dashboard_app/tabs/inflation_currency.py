@@ -1,8 +1,25 @@
+from html import escape
+
 from core import *
 
 
 DEFAULT_METRICS = ["CPI", "PPI", "PCE", "Import Price Index"]
 DEFAULT_COUNTRIES = ["USA", "China", "European Union", "Japan", "South Korea", "Vietnam"]
+PAGE5_BLUE = "#0072B2"
+PAGE5_ORANGE = "#D55E00"
+PAGE5_GREEN = "#009E73"
+PAGE5_PURPLE = "#CC79A7"
+PAGE5_GRID = "#e9edf3"
+PAGE5_NEUTRAL = "#667085"
+PAGE5_SEQUENCE = CVD_QUALITATIVE_COLORS
+PAGE5_FLOW_COLORS = {
+    "United States imports from China": PAGE5_BLUE,
+    "United States exports to China": PAGE5_ORANGE,
+}
+PAGE5_EVENT_COLORS = {
+    "Near tariff event": PAGE5_ORANGE,
+    "Not near event": PAGE5_BLUE,
+}
 CURRENCY_TARIFF_ALIASES = {
     "AUD": {"AUS", "Australia"},
     "BRL": {"BRA", "Brazil"},
@@ -30,38 +47,171 @@ def format_usd_millions_as_billions(value: float) -> str:
     return f"{sign}${abs(value) / 1_000:,.1f}B"
 
 
+def _set_all_checkboxes(option_count: int, key_prefix: str) -> None:
+    select_all = st.session_state.get(f"{key_prefix}_select_all", False)
+    for idx in range(option_count):
+        st.session_state[f"{key_prefix}_{idx}"] = select_all
+
+
+def _sync_select_all(option_count: int, key_prefix: str) -> None:
+    st.session_state[f"{key_prefix}_select_all"] = all(
+        st.session_state.get(f"{key_prefix}_{idx}", False)
+        for idx in range(option_count)
+    )
+
+
+def _selected_count(options: list[str], default: list[str], key_prefix: str) -> int:
+    return sum(
+        1
+        for idx, option in enumerate(options)
+        if st.session_state.get(f"{key_prefix}_{idx}", option in default)
+    )
+
+
+def _checkbox_dropdown(
+    label: str,
+    options: list[str],
+    default: list[str],
+    key_prefix: str,
+) -> list[str]:
+    for idx, option in enumerate(options):
+        st.session_state.setdefault(f"{key_prefix}_{idx}", option in default)
+    st.session_state.setdefault(
+        f"{key_prefix}_select_all",
+        all(
+            st.session_state.get(f"{key_prefix}_{idx}", False)
+            for idx in range(len(options))
+        ),
+    )
+
+    selected = []
+    selected_count = _selected_count(options, default, key_prefix)
+    with st.popover(f"{label} ({selected_count})", use_container_width=True):
+        st.checkbox(
+            "Select all",
+            key=f"{key_prefix}_select_all",
+            on_change=_set_all_checkboxes,
+            args=(len(options), key_prefix),
+        )
+        for idx, option in enumerate(options):
+            checked = st.checkbox(
+                option,
+                key=f"{key_prefix}_{idx}",
+                on_change=_sync_select_all,
+                args=(len(options), key_prefix),
+            )
+            if checked:
+                selected.append(option)
+    return selected
+
+
+def _render_page5_kpi_cards(kpis: list[tuple[str, str, str]]) -> None:
+    cards = "\n".join(
+        f"""
+        <div class="page5-kpi" style="border-top-color: {escape(accent)}; color: {escape(accent)};">
+            <strong style="color: {escape(accent)};">{escape(value)}</strong>
+            <span>{escape(label)}</span>
+        </div>
+        """
+        for label, value, accent in kpis
+    )
+    st.markdown(
+        f"""
+        <style>
+        .page5-kpis {{
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.7rem;
+            margin: 0.35rem 0 0.85rem;
+        }}
+        .page5-kpi {{
+            border: 1px solid #d9dee7;
+            border-top: 3px solid #20242a;
+            background: #f7f9fb;
+            border-radius: 6px;
+            padding: 0.8rem 0.65rem 0.7rem;
+            min-width: 0;
+            min-height: 92px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: center;
+        }}
+        .page5-kpi strong {{
+            display: block;
+            font-size: 1.25rem;
+            font-weight: 700;
+            line-height: 1.15;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            order: 1;
+        }}
+        .page5-kpi span {{
+            display: block;
+            color: #667085;
+            font-size: 0.68rem;
+            line-height: 1.1;
+            margin-top: 0.35rem;
+            text-transform: uppercase;
+            letter-spacing: 0.45px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            order: 2;
+        }}
+        .page5-kpi::after {{
+            content: "";
+            width: 28px;
+            height: 3px;
+            border-radius: 2px;
+            background: currentColor;
+            margin: 0.45rem auto 0;
+            order: 3;
+        }}
+        </style>
+        <div class="page5-kpis">
+            {cards}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def filter_inflation_currency_data(inflation: pd.DataFrame, currency: pd.DataFrame):
-    c1, c2, c3 = st.columns([1.25, 1.25, 1.25])
+    c_date, c1, c2, c3, c4 = st.columns(
+        [0.9, 1.05, 0.85, 1.25, 1.0],
+        vertical_alignment="bottom",
+    )
     with c1:
         metric_options = sorted(inflation["metric"].dropna().unique())
-        selected_metrics = st.multiselect(
+        selected_metrics = _checkbox_dropdown(
             "Metric",
             metric_options,
-            default=[m for m in DEFAULT_METRICS if m in metric_options],
-            key="page5_metrics",
+            [m for m in DEFAULT_METRICS if m in metric_options],
+            "page5_metrics",
         )
     with c2:
         era_options = [era for era in ERA_ORDER if era in set(inflation["era"].dropna())]
-        selected_eras = st.multiselect("Era", era_options, default=era_options, key="page5_eras")
+        selected_eras = _checkbox_dropdown("Era", era_options, era_options, "page5_eras")
     with c3:
         country_options = sorted(set(currency["country"].dropna()) | set(inflation["country"].dropna()))
         default_countries = [country for country in DEFAULT_COUNTRIES if country in country_options]
-        selected_countries = st.multiselect(
+        selected_countries = _checkbox_dropdown(
             "Country / economy",
             country_options,
-            default=default_countries or country_options,
-            key="page5_countries",
+            default_countries or country_options,
+            "page5_countries",
         )
 
     currency_base = currency[currency["country"].isin(selected_countries)].copy()
     currency_options = sorted(currency_base["currency"].dropna().unique())
-    c4, c5 = st.columns([1.25, 1.25])
     with c4:
-        selected_currencies = st.multiselect(
+        selected_currencies = _checkbox_dropdown(
             "Currency",
             currency_options,
-            default=currency_options,
-            key="page5_currencies",
+            currency_options,
+            "page5_currencies",
         )
 
     inflation_base = inflation[
@@ -82,7 +232,7 @@ def filter_inflation_currency_data(inflation: pd.DataFrame, currency: pd.DataFra
 
     min_date = min(start for start, _ in date_bounds).date()
     max_date = max(end for _, end in date_bounds).date()
-    with c5:
+    with c_date:
         date_range = st.date_input(
             "Available date range",
             value=(min_date, max_date),
@@ -90,7 +240,6 @@ def filter_inflation_currency_data(inflation: pd.DataFrame, currency: pd.DataFra
             max_value=max_date,
             key=f"page5_date_range_{min_date}_{max_date}",
         )
-        st.caption(f"Available from {min_date} to {max_date}.")
 
     if isinstance(date_range, tuple) and len(date_range) == 2:
         start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
@@ -132,10 +281,12 @@ def make_price_response_chart(df: pd.DataFrame) -> go.Figure:
         x="date",
         y="value",
         color="display_metric",
+        color_discrete_sequence=PAGE5_SEQUENCE,
         title="United States consumer, producer, and consumption price indexes",
         labels={"date": "", "value": "Index value", "display_metric": "Price index"},
     )
-    fig.update_yaxes(gridcolor="#e9edf3")
+    fig.update_traces(line=dict(width=2.2))
+    fig.update_yaxes(gridcolor=PAGE5_GRID)
     fig.update_layout(
         height=430,
         showlegend=True,
@@ -153,10 +304,12 @@ def make_import_price_chart(df: pd.DataFrame) -> go.Figure:
         x="date",
         y="value",
         color="series_label",
+        color_discrete_sequence=PAGE5_SEQUENCE,
         title="United States import price index",
         labels={"date": "", "value": "Index value", "series_label": ""},
     )
-    fig.update_layout(height=310, yaxis=dict(gridcolor="#e9edf3"), showlegend=False, title_font_size=14, margin=dict(l=50, r=14, t=50, b=34))
+    fig.update_traces(line=dict(width=2.2))
+    fig.update_layout(height=310, yaxis=dict(gridcolor=PAGE5_GRID), showlegend=False, title_font_size=14, margin=dict(l=50, r=14, t=50, b=34))
     return fig
 
 
@@ -178,11 +331,11 @@ def make_average_yoy_by_era_chart(df: pd.DataFrame) -> go.Figure:
         color="metric",
         barmode="group",
         category_orders={"era_display": ["Pre-Trade<br>War", "Trade War<br>1.0", "Phase 1 +<br>COVID", "Trade War<br>2.0"]},
-        color_discrete_sequence=px.colors.qualitative.Set2,
+        color_discrete_sequence=PAGE5_SEQUENCE,
         title="Average year-over-year change by era",
         labels={"era_display": "Trade-war era", "yoy_change_pct": "Year-over-year change (%)", "metric": "Metric"},
     )
-    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=54, r=14, t=50, b=74))
+    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor=PAGE5_GRID, zeroline=True, zerolinecolor=PAGE5_NEUTRAL), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=54, r=14, t=50, b=74))
     return fig
 
 
@@ -199,10 +352,12 @@ def make_china_trade_chart(df: pd.DataFrame) -> go.Figure:
         x="date",
         y="value",
         color="flow_label",
+        color_discrete_map=PAGE5_FLOW_COLORS,
         title="United States-China trade flows",
         labels={"date": "", "value": "United States dollars<br>(millions)", "flow_label": "Trade flow"},
     )
-    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.34, x=0), margin=dict(l=62, r=14, t=50, b=78))
+    fig.update_traces(line=dict(width=2.2))
+    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor=PAGE5_GRID, rangemode="tozero"), legend=dict(orientation="h", y=-0.34, x=0), margin=dict(l=62, r=14, t=50, b=78))
     return fig
 
 
@@ -222,11 +377,13 @@ def make_china_trade_yoy_chart(df: pd.DataFrame) -> go.Figure:
         x="date",
         y="yoy_change_pct",
         color="flow_label",
+        color_discrete_map=PAGE5_FLOW_COLORS,
         title="United States-China trade year-over-year change",
         labels={"date": "", "yoy_change_pct": "Year-over-year change (%)", "flow_label": "Trade flow"},
     )
-    fig.add_hline(y=0, line_dash="dash", line_color="#667085", line_width=1)
-    fig.update_layout(height=300, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.34, x=0), margin=dict(l=54, r=14, t=50, b=78))
+    fig.update_traces(line=dict(width=2.2))
+    fig.add_hline(y=0, line_dash="dash", line_color=PAGE5_NEUTRAL, line_width=1)
+    fig.update_layout(height=300, title_font_size=14, yaxis=dict(gridcolor=PAGE5_GRID), legend=dict(orientation="h", y=-0.34, x=0), margin=dict(l=54, r=14, t=50, b=78))
     return fig
 
 
@@ -240,16 +397,17 @@ def make_trade_balance_chart(df: pd.DataFrame) -> go.Figure:
             mode="lines",
             fill="tozeroy",
             name="United States total trade balance",
-            line=dict(color="#b15c63", width=2.4),
+            line=dict(color=PAGE5_ORANGE, width=2.4),
+            fillcolor="rgba(213, 94, 0, 0.18)",
             hovertemplate="%{x|%Y-%m-%d}<br>Value: %{y:,.2f}<extra></extra>",
         )
     )
-    fig.add_hline(y=0, line_dash="dash", line_color="#667085", line_width=1)
+    fig.add_hline(y=0, line_dash="dash", line_color=PAGE5_NEUTRAL, line_width=1)
     fig.update_layout(
         title="United States total trade balance",
         height=310,
         xaxis=dict(title=""),
-        yaxis=dict(title="United States dollars<br>(millions)", gridcolor="#e9edf3"),
+        yaxis=dict(title="United States dollars<br>(millions)", gridcolor=PAGE5_GRID),
         title_font_size=14,
         margin=dict(l=62, r=14, t=50, b=34),
     )
@@ -269,6 +427,7 @@ def make_currency_rate_chart(df: pd.DataFrame, tariff: pd.DataFrame) -> go.Figur
         x="date",
         y="rate_vs_usd",
         color="currency",
+        color_discrete_sequence=PAGE5_SEQUENCE,
         title="Currency rate versus United States dollar",
         labels={"date": "", "rate_vs_usd": "Local currency units<br>per United States dollar", "currency": "Currency"},
     )
@@ -282,7 +441,7 @@ def make_currency_rate_chart(df: pd.DataFrame, tariff: pd.DataFrame) -> go.Figur
             fig.add_vrect(
                 x0=trade_war_1_start,
                 x1=trade_war_1_end,
-                fillcolor="#d9895b",
+                fillcolor=PERIOD_COLORS.get("Trade War 1.0", PAGE5_ORANGE),
                 opacity=0.18,
                 line_width=0,
                 annotation_text="Trade War 1.0",
@@ -294,7 +453,7 @@ def make_currency_rate_chart(df: pd.DataFrame, tariff: pd.DataFrame) -> go.Figur
             fig.add_vrect(
                 x0=trade_war_2_start,
                 x1=end_date,
-                fillcolor="#b15c63",
+                fillcolor=PERIOD_COLORS.get("Trade War 2.0", PAGE5_ORANGE),
                 opacity=0.18,
                 line_width=0,
                 annotation_text="Trade War 2.0",
@@ -329,10 +488,10 @@ def make_currency_rate_chart(df: pd.DataFrame, tariff: pd.DataFrame) -> go.Figur
                     x=[event["date"]],
                     y=[y_pos],
                     mode="markers+text",
-                    marker=dict(symbol="triangle-up", size=12, color="#ff2b2b", line=dict(width=1, color="#b00020")),
+                    marker=dict(symbol="triangle-down", size=11, color=PAGE5_ORANGE, line=dict(width=1, color="#ffffff"), opacity=0.86),
                     text=[f"{event['tariff_rate_pct']:.0f}%"],
                     textposition="top right",
-                    textfont=dict(size=10, color="#6b1f1f"),
+                    textfont=dict(size=10, color=PAGE5_ORANGE),
                     name="Targeted by tariff" if not target_marker_added else None,
                     showlegend=not target_marker_added,
                     hovertemplate=(
@@ -358,10 +517,10 @@ def make_currency_rate_chart(df: pd.DataFrame, tariff: pd.DataFrame) -> go.Figur
                     x=[event["date"]],
                     y=[y_pos],
                     mode="markers+text",
-                    marker=dict(symbol="triangle-up", size=12, color="#1f77d0", line=dict(width=1, color="#0b4f9c")),
+                    marker=dict(symbol="triangle-up", size=11, color=PAGE5_BLUE, line=dict(width=1, color="#ffffff"), opacity=0.86),
                     text=[f"{event['tariff_rate_pct']:.0f}%"],
                     textposition="bottom right",
-                    textfont=dict(size=10, color="#0b3d78"),
+                    textfont=dict(size=10, color=PAGE5_BLUE),
                     name="Imposed tariff" if not imposing_marker_added else None,
                     showlegend=not imposing_marker_added,
                     hovertemplate=(
@@ -377,7 +536,8 @@ def make_currency_rate_chart(df: pd.DataFrame, tariff: pd.DataFrame) -> go.Figur
             )
             imposing_marker_added = True
 
-    fig.update_layout(height=430, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.24, x=0), margin=dict(l=70, r=14, t=54, b=70))
+    fig.update_traces(selector=dict(mode="lines"), line=dict(width=2.1))
+    fig.update_layout(height=430, title_font_size=14, yaxis=dict(gridcolor=PAGE5_GRID), legend=dict(orientation="h", y=-0.24, x=0), margin=dict(l=70, r=14, t=54, b=70))
     return fig
 
 
@@ -387,10 +547,12 @@ def make_rolling_volatility_chart(df: pd.DataFrame) -> go.Figure:
         x="date",
         y="rolling_7d_vol",
         color="currency",
+        color_discrete_sequence=PAGE5_SEQUENCE,
         title="Rolling 7-day currency volatility",
         labels={"date": "", "rolling_7d_vol": "Volatility", "currency": "Currency"},
     )
-    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=50, r=14, t=50, b=74))
+    fig.update_traces(line=dict(width=2.1))
+    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor=PAGE5_GRID, rangemode="tozero"), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=50, r=14, t=50, b=74))
     return fig
 
 
@@ -402,11 +564,13 @@ def make_currency_event_change_chart(df: pd.DataFrame) -> go.Figure:
         x="Event proximity",
         y="pct_change_1d",
         color="currency",
+        color_discrete_sequence=PAGE5_SEQUENCE,
         title="One-day currency change near tariff events",
         labels={"pct_change_1d": "One-day change (%)", "currency": "Currency"},
     )
-    fig.add_hline(y=0, line_dash="dash", line_color="#667085", line_width=1)
-    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=54, r=14, t=50, b=74))
+    fig.update_traces(marker=dict(opacity=0.58, line=dict(width=0.5, color="#ffffff")))
+    fig.add_hline(y=0, line_dash="dash", line_color=PAGE5_NEUTRAL, line_width=1)
+    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor=PAGE5_GRID), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=54, r=14, t=50, b=74))
     return fig
 
 
@@ -423,9 +587,9 @@ def make_currency_event_average_chart(df: pd.DataFrame) -> go.Figure:
         barmode="group",
         title="Average absolute one-day currency move",
         labels={"currency": "", "abs_change_1d": "Average absolute<br>one-day change (%)"},
-        color_discrete_map={"Near tariff event": "#b15c63", "Not near event": "#4c78a8"},
+        color_discrete_map=PAGE5_EVENT_COLORS,
     )
-    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=62, r=14, t=50, b=74))
+    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor=PAGE5_GRID, rangemode="tozero"), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=62, r=14, t=50, b=74))
     return fig
 
 
@@ -437,11 +601,12 @@ def make_latest_currency_pressure_chart(df: pd.DataFrame) -> go.Figure:
         x="currency",
         y="pct_change_30d",
         color="country",
+        color_discrete_sequence=PAGE5_SEQUENCE,
         title="Latest 30-day currency pressure",
         labels={"currency": "", "pct_change_30d": "30-day change (%)", "country": "Country"},
     )
-    fig.add_hline(y=0, line_dash="dash", line_color="#667085", line_width=1)
-    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor="#e9edf3"), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=54, r=14, t=50, b=74))
+    fig.add_hline(y=0, line_dash="dash", line_color=PAGE5_NEUTRAL, line_width=1)
+    fig.update_layout(height=310, title_font_size=14, yaxis=dict(gridcolor=PAGE5_GRID), legend=dict(orientation="h", y=-0.32, x=0), margin=dict(l=54, r=14, t=50, b=74))
     return fig
 
 
@@ -452,8 +617,26 @@ def render_inflation_currency_tab() -> None:
 
     st.markdown(
         """
-        <div class="page-title">
-            <div>
+        <style>
+        .page5-page-title {
+            margin-top: -0.7rem;
+            margin-bottom: 0.35rem;
+            padding-bottom: 0.28rem;
+        }
+        .page5-compact-title h1 {
+            font-size: 1.35rem;
+            line-height: 1.2;
+            margin: 0;
+        }
+        .page5-compact-title p {
+            margin: 0;
+            color: #667085;
+            font-size: 0.82rem;
+            line-height: 1.15;
+        }
+        </style>
+        <div class="page-title page5-page-title">
+            <div class="page5-compact-title">
                 <h1>Inflation & Currency Response</h1>
                 <p>Connecting tariff tension to United States price pressure, United States-China trade flows, the United States total trade balance, and selected-country exchange-rate stress.</p>
             </div>
@@ -491,17 +674,30 @@ def render_inflation_currency_tab() -> None:
     )
     event_rows = int(currency_filtered["tariff_event_nearby"].sum()) if not currency_filtered.empty else 0
 
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Latest United States CPI year-over-year", format_pct(latest_cpi.iloc[0]["yoy_change_pct"]) if not latest_cpi.empty else "n/a")
-    k2.metric(
-        "Latest United States import price year-over-year",
-        format_pct(latest_import_price.iloc[0]["yoy_change_pct"]) if not latest_import_price.empty else "n/a",
+    _render_page5_kpi_cards(
+        [
+            (
+                "Latest United States CPI year-over-year",
+                format_pct(latest_cpi.iloc[0]["yoy_change_pct"]) if not latest_cpi.empty else "n/a",
+                "#20242a",
+            ),
+            (
+                "Latest United States import price year-over-year",
+                format_pct(latest_import_price.iloc[0]["yoy_change_pct"]) if not latest_import_price.empty else "n/a",
+                PAGE5_BLUE,
+            ),
+            (
+                "Latest United States total trade balance",
+                format_usd_millions_as_billions(latest_trade_balance.iloc[0]["value"]) if not latest_trade_balance.empty else "n/a",
+                PAGE5_ORANGE,
+            ),
+            (
+                "Selected-country currency rows near tariff events",
+                f"{event_rows:,}",
+                PAGE5_GREEN,
+            ),
+        ]
     )
-    k3.metric(
-        "Latest United States total trade balance",
-        format_usd_millions_as_billions(latest_trade_balance.iloc[0]["value"]) if not latest_trade_balance.empty else "n/a",
-    )
-    k4.metric("Selected-country currency rows near tariff events", f"{event_rows:,}")
 
     price_response = inflation_all[
         ((inflation_all["metric"] == "CPI") & (inflation_all["category"] == "All Items"))
