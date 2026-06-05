@@ -10,6 +10,11 @@ Current tabs:
 - `Sectoral Impact`: sector ETF performance, latest sector heatmap, tariff-sensitivity returns, and volatility.
 - `Inflation & Currency Response`: US price pressure, US-China trade flows, US total trade balance, currency rates versus USD, rolling 7-day volatility, and currency movement around tariff events.
 
+## Installations
+'''bash
+pip install -r trade_dashboard_app/requirements.txt
+'''
+
 ## Run
 
 ```bash
